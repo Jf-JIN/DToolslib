@@ -33,24 +33,24 @@ class _itemBase:
 
 
 _analog_define_dict = {
-    int: 'ADInteger',
-    float: 'ADFloat',
-    str: 'ADString',
-    list: 'ADList',
-    tuple: 'ADTuple',
-    set: 'ADSet',
-    frozenset: 'ADFrozenSet',
-    dict: 'ADDictionary',
-    complex: 'ADComplexNumber',
-    bytes: 'ADBytes',
-    bytearray: 'ADByteArray'
+    int: 'SEInteger',
+    float: 'SEFloat',
+    str: 'SEString',
+    list: 'SEList',
+    tuple: 'SETuple',
+    set: 'SESet',
+    frozenset: 'SEFrozenSet',
+    dict: 'SEDictionary',
+    complex: 'SEComplexNumber',
+    bytes: 'SEBytes',
+    bytearray: 'SEByteArray'
 }
 
 for type_, type_class in _analog_define_dict.items():
     globals()[type_class] = type(type_class, (type_, _itemBase), {})
 
 
-class _AnalogDefineDict(dict):
+class _StaticEnumDict(dict):
     """
     用于存储枚举项的字典类, 检查重复定义项
     """
@@ -70,16 +70,16 @@ class _AnalogDefineDict(dict):
         super().__setitem__(key, value)
 
 
-class _AnalogDefineMeta(type):
+class _StaticEnumMeta(type):
     """
     枚举类的元类
     """
     @classmethod
-    def __prepare__(metacls, cls, bases, **kwds) -> _AnalogDefineDict:
+    def __prepare__(metacls, cls, bases, **kwds) -> _StaticEnumDict:
         """
         用于创建枚举项的字典类, 以便之后查找相同的枚举项
         """
-        enum_dict = _AnalogDefineDict()
+        enum_dict = _StaticEnumDict()
         enum_dict._cls_name = cls
         return enum_dict
 
@@ -93,9 +93,9 @@ class _AnalogDefineMeta(type):
         for key, value in members.items():
             if key == 'isAllowedSetValue' or key == '_members_':
                 continue
-            elif isinstance(value, type) and not issubclass(value, AnalogDefine) and value is not cls:
+            elif isinstance(value, type) and not issubclass(value, StaticEnum) and value is not cls:
                 original_bases = value.__bases__
-                new_bases = (AnalogDefine,) + original_bases
+                new_bases = (StaticEnum,) + original_bases
                 new_cls = type(value.__name__, new_bases, dict(value.__dict__))
                 setattr(cls, key, new_cls)
                 continue
@@ -110,8 +110,20 @@ class _AnalogDefineMeta(type):
             raise AttributeError(f'禁止修改枚举项\t< {key.__qualname__} > = {cls._members_[key]}')
         super().__setattr__(key, value)
 
+    def __iter__(cls):
+        return iter(cls._members_.values())
 
-class AnalogDefine(metaclass=_AnalogDefineMeta):
+    def __contains__(self, item):
+        return item in self._members_.values()
+
+
+class StaticEnum(metaclass=_StaticEnumMeta):
+    """ 
+    静态枚举类, 属性不可修改 Static enumeration class, attributes cannot be modified
+
+    - 可以给枚举项添加属性, None和Boolean类型除外 You can add attributes to enumeration items except none and boolean types
+    - 可以遍历, 使用keys(), 使用values(), 使用items() You can traverse, use keys(), use values(), and use items()
+    """
     @classmethod
     def members(cls):
         temp = []
@@ -120,9 +132,6 @@ class AnalogDefine(metaclass=_AnalogDefineMeta):
                 continue
             temp.append((key, value))
         return temp
-
-    def __contains__(self, item):
-        return item in self._members_.keys()
 
     def __hasattr__(self, item):
         return item in self._members_.keys()
@@ -141,13 +150,16 @@ class AnalogDefine(metaclass=_AnalogDefineMeta):
 
 
 if __name__ == '__main__':
-    class Test(AnalogDefine):
-        A = 1
-        B = 2.0
-        C = '3 5'
-        D = [4, 'F F', 5.655, [5, 'p'], {'a': 'b 1'}, {'f', 'ds'}]
-        F = {5}
-        G = {'g': 6}
-    print(Test.A)
-    print(Test.A.name)
-    print(type(Test.A))
+    class TestEnum(StaticEnum):
+        A = '#ffffff'
+        A.color_name = 'Red'
+        A.ansi_font = 31
+        A.ansi_background = 41
+
+    print(TestEnum.A)  # output: #ffffff
+    print(TestEnum.A.name)  # output: A
+    print(TestEnum.A.color_name)  # output: Red
+    print(TestEnum.A.ansi_font)  # output: 31
+    print(type(TestEnum.A))  # output: <class '__main__.SEString'>
+    print('#ffffff' in TestEnum)  # output: True
+    print(isinstance(TestEnum.A, str))  # output: True

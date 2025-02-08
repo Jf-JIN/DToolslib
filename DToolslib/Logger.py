@@ -396,6 +396,8 @@ class Logger(object):
     - split_by_day(bool): 是否按天分割日志, 默认不分割
     - message_format(str): 消息格式, 可自定义, 详细方法见示例. 默认格式为: `%(consoleLine)s\\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\\n%(message)s\\n`
     - exclude_funcs(list[str]): 排除的函数列表, 用于追溯调用位置时, 排除父级调用函数, 排除的函数链应是完整的, 只写顶层的函数名将可能不会产生效果, 默认为空列表
+    - exclude_classes(list[str]): 排除的类列表, 用于追溯调用位置时, 排除父级调用类, 默认为空列表
+    - exclude_modules(list[str]): 排除的模块列表, 用于追溯调用位置时, 排除父级调用模块, 默认为空列表
     - highlight_type(str|None): 高亮模式. 默认为 `ASNI`, 取消高亮则使用 None. 当前支持 `ASNI`, `HTML`
     - **kwargs, 消息格式中的自定义参数, 使用方法见示例
 
@@ -1263,18 +1265,18 @@ class LoggerGroup(object):
 
 if __name__ == '__main__':
     Log = Logger('test', os.path.dirname(__file__), log_level='info', size_limit=1024, doSplitByDay=True)
-    Logs = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace', size_limit=1024, doSplitByDay=True)
+    Log_1 = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace', size_limit=1024, doSplitByDay=True)
     Log.signal_debug_message.connect(print)
-    Logg = LoggerGroup(os.path.dirname(__file__))
-    logging.debug('hello world from logging debug')
+    Logger_group = LoggerGroup(os.path.dirname(__file__))
+    logging.debug('hello world from logging debug')  # logging 跟踪示例
     logging.info('hello world from logging info')
     logging.error("This is a error message from logging.")
     logging.warning("This is a warning message from logging.")
     logging.critical("This is a critical message from logging.")
     Log.trace('This is a trace message.')
     Log.debug('This is a debug message.')
-    Logs.debug('This is a debug message.')
+    Log_1.debug('This is a debug message.')
     Log.info('This is a info message.')
-    Logs.warning('This is a warning message.')
+    Log_1.warning('This is a warning message.')
     Log.error('This is a error message.')
-    Logs.critical('This is a critical message.')
+    Log_1.critical('This is a critical message.')

@@ -59,8 +59,27 @@ class _RealSignal:
 
 
 class EventSignal:
-    def __init__(self, *types, signal_scope='instance') -> None:
-        self.types = types
+    """ 
+    事件信号, 当前不支持线程锁和异步操作
+    Event signal, thread lock and asynchronous operations are not currently supported
+
+    属性保护 
+    Attribute protection
+
+    Args:
+        *types(type, tuple): 信号参数类型, Signal parameter types.
+        signal_scope(str): 信号作用域, Signal scope.
+            `instance`(default): 实例信号, Instance signal. 
+            `class`: 类信号, Class signal.
+
+    Methods:
+        connect: 连接信号槽, Connect signal slot.
+        disconnect: 断开信号槽, Disconnect signal slot.
+        emit: 发射信号, Emit signal.
+    """
+
+    def __init__(self, *types: type | tuple, signal_scope: str = 'instance') -> None:
+        self.__types = types
         self.__scope = signal_scope
 
     def __get__(self, instance, instance_type) -> _RealSignal:
@@ -83,7 +102,7 @@ class EventSignal:
             instance_type.__class_signals__ = {}
         if self not in instance_type.__class_signals__:
             instance_type.__class_signals__[self] = _RealSignal(
-                self.types,
+                self.__types,
                 instance_type,
                 self.__name,
                 isClassSignal=True
@@ -95,7 +114,7 @@ class EventSignal:
             instance.__signals__ = {}
         if self not in instance.__signals__:
             instance.__signals__[self] = _RealSignal(
-                self.types,
+                self.__types,
                 instance,
                 self.__name
             )
@@ -104,15 +123,19 @@ class EventSignal:
 
 if __name__ == '__main__':
     class Test:
-        signal_instance_a = EventSignal(int)
-        signal_instance_b = EventSignal(str, int)
-        signal_class = EventSignal(str, int, signal_scope='class')
+        signal_instance_a = EventSignal(str)  # Instance Signal
+        signal_instance_b = EventSignal(str, int)  # Instance Signal
+        signal_class = EventSignal(str, int, signal_scope='class')  # Class Signal
     a = Test()
     b = Test()
-    print(f'[a.signal_instance_a] id: {id(a.signal_instance_a)}')
-    print(f'[b.signal_instance_a] id: {id(b.signal_instance_a)}')
-    print(f'Are they identical? {a.signal_instance_a is b.signal_instance_a}\n')
-    print(f'[a.signal_class] id: {id(a.signal_class)}')
-    print(f'[b.signal_class] id: {id(b.signal_class)}')
-    print(f'Are they identical? {a.signal_class is b.signal_class}')
-    print(type(a.signal_class))
+    b.signal_instance_a.connect(print)
+    a.signal_instance_b.connect(b.signal_instance_a)
+    b.signal_instance_a.emit('This is a test message')
+    a.signal_instance_a.disconnect(b.signal_instance_a)
+
+    # output: This is a test message
+    print(a.signal_class is b.signal_class)  # output: True
+    print(a.signal_instance_a is b.signal_instance_a)  # output: False
+    print(type(a.signal_class))  # output: <class '__main__.EventSignal'>
+    print(a.__signals__)  # output: {...} a dict with 2 keys, the values are signal instances. You can also see the slots of the signal.
+    print(a.__class_signals__)  # output: {...} a dict with 1 keys, the values are signal instances. You can also see the slots of the signal.

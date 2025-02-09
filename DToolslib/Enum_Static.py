@@ -40,7 +40,7 @@ class _itemBase:
     def __setattr__(self, key: str, value):
         if value is _null:
             return
-        if key in self.__dict__ or hasattr(self, f'_{self.__class__.__name__}__attr_lock'):
+        if key in self.__dict__ or (hasattr(self, f'_{self.__class__.__name__}__attr_lock')):
             raise AttributeError(f'Enumeration items are immutable and cannot be modified: <{key}> = {value}')
         super().__setattr__(key, value)
 
@@ -59,6 +59,7 @@ _analog_define_dict = {
     bytearray: 'SEByteArray'
 }
 
+
 for type_, type_class in _analog_define_dict.items():
     globals()[type_class] = type(type_class, (type_, _itemBase), {})
 
@@ -73,10 +74,11 @@ class _StaticEnumDict(dict):
         self._cls_name = None
         self._member_names = {}
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value):
         if key in self._member_names:
             raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
-        if (type(value) in _analog_define_dict) and key not in _object_attr:
+        if (type(value) in _analog_define_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
+            # 默认所有 __名称__ 的属性都是类的重要属性，不能被枚举项占用
             value = eval(f'{_analog_define_dict[type(value)]}({repr(value)})')
             value.name = key
         self._member_names[key] = value
@@ -97,6 +99,35 @@ class _StaticEnumMeta(type):
         return enum_dict
 
     def __new__(mcs, name, bases, dct: dict):
+        def _convert_to_enum_item(cls, key, value):
+            cls_dict = dict(value.__dict__)
+            flag_allow_new_attr = False
+            for sub_key, sub_value in cls_dict.items():
+                if isinstance(sub_value, type) and not issubclass(sub_value, StaticEnum) and sub_value is not value:
+                    _convert_to_enum_item(sub_value, sub_key, sub_value)
+                if sub_key not in _object_attr and not (sub_key.startswith('__') and sub_key.endswith('__')) and type(sub_value) in _analog_define_dict:
+                    cls_dict[sub_key] = eval(f'{_analog_define_dict[type(sub_value)]}({repr(sub_value)})')
+                    cls_dict[sub_key].name = sub_key
+                    if hasattr(cls, '__allow_new_attr__') and cls.__allow_new_attr__:
+                        flag_allow_new_attr = True
+            if flag_allow_new_attr:
+                cls_dict['__allow_new_attr__'] = True
+            new_cls = type(
+                value.__name__,
+                (StaticEnum,),
+                cls_dict
+            )
+            setattr(cls, key, new_cls)
+
+        def _recursion_set_attr_lock(cls):
+            for obj_name, obj in cls.__members__.items():
+                if obj_name == 'isAllowedSetValue':
+                    continue
+                if isinstance(obj, _StaticEnumMeta):
+                    _recursion_set_attr_lock(obj)
+                    continue
+                setattr(obj, f'_{obj.__class__.__name__}__attr_lock', None)
+
         if len(bases) == 0:
             return super().__new__(mcs, name, bases, dct)
         dct['__members__'] = {}  # 用于存储枚举项的字典
@@ -107,24 +138,21 @@ class _StaticEnumMeta(type):
             if key == 'isAllowedSetValue' or key == '__members__':
                 continue
             elif isinstance(value, type) and not issubclass(value, StaticEnum) and value is not cls:
-                original_bases = value.__bases__
-                new_bases = (StaticEnum,) + original_bases
-                new_cls = type(value.__name__, new_bases, dict(value.__dict__))
-                setattr(cls, key, new_cls)
+                _convert_to_enum_item(cls, key, value)
                 continue
             cls.__members__['isAllowedSetValue'] = True
             cls.__members__[key] = value
             setattr(cls, key, value)
         if not hasattr(cls, '__allow_new_attr__') or not cls.__allow_new_attr__:
-            for obj_name, obj in cls.__members__.items():
-                if obj_name == 'isAllowedSetValue':
-                    continue
-                setattr(obj, f'_{obj.__class__.__name__}__attr_lock', None)
+            _recursion_set_attr_lock(cls)
+        cls.__members__['isAllowedSetValue'] = False
         return cls
 
     def __setattr__(cls, key, value):
         if key in cls.__members__ and not cls.__members__['isAllowedSetValue']:
             raise TypeError(f'Modification of the member "{key.__qualname__}" in the "{cls.__name__}" enumeration is not allowed. < {key.__qualname__} > = {cls.__members__[key]}')
+        elif key not in cls.__members__ and not isinstance(value, type) and '__attr_lock' not in key and not cls.__members__['isAllowedSetValue']:
+            raise TypeError(f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.')
         super().__setattr__(key, value)
 
     def __iter__(cls):
@@ -179,7 +207,7 @@ class StaticEnum(metaclass=_StaticEnumMeta):
         return self.__members__.values()
 
 
-""" 
+"""
 if __name__ == '__main__':
     class TestEnum(StaticEnum):
         A = '#ffffff'

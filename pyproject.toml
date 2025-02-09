@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "DToolslib"
-version = "0.0.1.1"
-description = "A Tools Library (test publish)"
+version = "0.0.1.2"
+description = "A simple and complex tool library containing multiple tool scripts 一个简单且杂的工具库, 包含多个工具脚本"
 authors = [{ name = "Jf-JIN" }]
 readme = "README.md"
 license = { file = "LICENSE" } 

@@ -140,6 +140,18 @@ class StaticEnum(metaclass=_StaticEnumMeta):
 
     - 可以给枚举项添加属性, None和Boolean类型除外 You can add attributes to enumeration items except none and boolean types
     - 可以遍历, 使用keys(), 使用values(), 使用items() You can traverse, use keys(), use values(), and use items()
+
+    如果枚举类含有__allow_new_attr__属性, 则允许枚举类外部给枚举项添加新的属性，例如：
+    If the enumeration class contains the __allow_new_attr__ attribute, it is allowed to add new attributes to enumeration items outside the enumeration class, for example:
+
+    class MyEnum(StaticEnum):
+        __allow_new_attr__ = True
+        A = 1
+        B = 2
+
+    MyEnum.A.new_attr = 3 # No Error, else Error will occur.
+
+
     """
     @classmethod
     def members(cls) -> list:

@@ -23,6 +23,7 @@ An enumeration library, supported
 
 ```python
 class TestEnum(StaticEnum):
+    # __allow_new_attr__ = True  # Allow new attributes to be added outside the class | 允许类外部添加新属性
     A = '#ffffff'
     A.color_name = 'Red'
     A.ansi_font = 31

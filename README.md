@@ -24,17 +24,17 @@ An enumeration library, supported
 ```python
 class TestEnum(StaticEnum):
     # __allow_new_attr__ = True  # Allow new attributes to be added outside the class | 允许类外部添加新属性
-    A = '#ffffff'
+    A = '#ff0000'
     A.color_name = 'Red'
     A.ansi_font = 31
     A.ansi_background = 41
 
-print(TestEnum.A)  # output: #ffffff
+print(TestEnum.A)  # output: #ff0000
 print(TestEnum.A.name)  # output: A
 print(TestEnum.A.color_name)  # output: Red
 print(TestEnum.A.ansi_font)  # output: 31
 print(type(TestEnum.A))  # output: <class '__main__.SEString'>
-print('#ffffff' in TestEnum)  # output: True
+print('#ff0000' in TestEnum)  # output: True
 print(isinstance(TestEnum.A, str))  # output: True
 ```
 

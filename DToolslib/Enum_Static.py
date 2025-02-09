@@ -10,11 +10,24 @@
 
 
 class _null:
+    __instance = None
+
+    def __new__(cls):
+        if cls.__instance is None:
+            cls.__instance = object.__new__(cls)
+        return cls.__instance
+
     def __repr__(self):
-        return '< class _null >'
+        return '<class _null>'
 
 
 _null = _null()
+
+_object_attr = [
+    '__new__', '__repr__', '__hash__', '__str__', '__getattribute__', '__setattr__', '__delattr__', '__lt__', '__le__', '__eq__', '__ne__', '__gt__', '__ge__',
+    '__init__', '__reduce_ex__', '__reduce__', '__getstate__', '__subclasshook__', '__init_subclass__', '__format__', '__sizeof__', '__dir__', '__class__', '__doc__',
+    '__module__', '__qualname__', '__members__', 'isAllowedSetValue',
+]
 
 
 class _itemBase:
@@ -27,8 +40,8 @@ class _itemBase:
     def __setattr__(self, key: str, value):
         if value is _null:
             return
-        if key in self.__dict__:
-            raise AttributeError(f'禁止修改枚举项\t< {key} > = {value}')
+        if key in self.__dict__ or hasattr(self, f'_{self.__class__.__name__}__attr_lock'):
+            raise AttributeError(f'Enumeration items are immutable and cannot be modified: <{key}> = {value}')
         super().__setattr__(key, value)
 
 
@@ -57,13 +70,13 @@ class _StaticEnumDict(dict):
 
     def __init__(self):
         super().__init__()
-        self.cls_name = None
+        self._cls_name = None
         self._member_names = {}
 
     def __setitem__(self, key, value):
         if key in self._member_names:
-            raise ValueError(f'枚举项重复: 已存在\t< {key} > = {self._member_names[key]}')
-        if type(value) in _analog_define_dict and key not in ['__module__', '__qualname__', '_members_', 'isAllowedSetValue']:
+            raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
+        if (type(value) in _analog_define_dict) and key not in _object_attr:
             value = eval(f'{_analog_define_dict[type(value)]}({repr(value)})')
             value.name = key
         self._member_names[key] = value
@@ -86,12 +99,12 @@ class _StaticEnumMeta(type):
     def __new__(mcs, name, bases, dct: dict):
         if len(bases) == 0:
             return super().__new__(mcs, name, bases, dct)
-        dct['_members_'] = {}  # 用于存储枚举项的字典
+        dct['__members__'] = {}  # 用于存储枚举项的字典
         dct['isAllowedSetValue'] = False  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
         members = {key: value for key, value in dct.items() if not key.startswith('__')}
         cls = super().__new__(mcs, name, bases, dct)
         for key, value in members.items():
-            if key == 'isAllowedSetValue' or key == '_members_':
+            if key == 'isAllowedSetValue' or key == '__members__':
                 continue
             elif isinstance(value, type) and not issubclass(value, StaticEnum) and value is not cls:
                 original_bases = value.__bases__
@@ -99,54 +112,59 @@ class _StaticEnumMeta(type):
                 new_cls = type(value.__name__, new_bases, dict(value.__dict__))
                 setattr(cls, key, new_cls)
                 continue
-            cls._members_['isAllowedSetValue'] = True
-            cls._members_[key] = value
+            cls.__members__['isAllowedSetValue'] = True
+            cls.__members__[key] = value
             setattr(cls, key, value)
-            cls._members_['isAllowedSetValue'] = False
+        if not hasattr(cls, '__allow_new_attr__') or not cls.__allow_new_attr__:
+            for obj_name, obj in cls.__members__.items():
+                if obj_name == 'isAllowedSetValue':
+                    continue
+                setattr(obj, f'_{obj.__class__.__name__}__attr_lock', None)
         return cls
 
     def __setattr__(cls, key, value):
-        if key in cls._members_ and not cls._members_['isAllowedSetValue']:
-            raise AttributeError(f'禁止修改枚举项\t< {key.__qualname__} > = {cls._members_[key]}')
+        if key in cls.__members__ and not cls.__members__['isAllowedSetValue']:
+            raise TypeError(f'Modification of the member "{key.__qualname__}" in the "{cls.__name__}" enumeration is not allowed. < {key.__qualname__} > = {cls.__members__[key]}')
         super().__setattr__(key, value)
 
     def __iter__(cls):
-        return iter(cls._members_.values())
+        return iter(cls.__members__.values())
 
-    def __contains__(self, item):
-        return item in self._members_.values()
+    def __contains__(self, item) -> bool:
+        return item in self.__members__.values()
 
 
 class StaticEnum(metaclass=_StaticEnumMeta):
-    """ 
+    """
     静态枚举类, 属性不可修改 Static enumeration class, attributes cannot be modified
 
     - 可以给枚举项添加属性, None和Boolean类型除外 You can add attributes to enumeration items except none and boolean types
     - 可以遍历, 使用keys(), 使用values(), 使用items() You can traverse, use keys(), use values(), and use items()
     """
     @classmethod
-    def members(cls):
+    def members(cls) -> list:
+        cls.__members__: dict
         temp = []
-        for key, value in cls._members_.items():
-            if key == 'isAllowedSetValue' or key == '_members_':
+        for key, value in cls.__members__.items():
+            if key == 'isAllowedSetValue' or key == '__members__':
                 continue
             temp.append((key, value))
         return temp
 
     def __hasattr__(self, item):
-        return item in self._members_.keys()
+        return item in self.__members__.keys()
 
     def __getattr__(self, item):
-        return self._members_[item]
+        return self.__members__[item]
 
     def items(self):
-        return self._members_.items()
+        return self.__members__.items()
 
     def keys(self):
-        return self._members_.keys()
+        return self.__members__.keys()
 
     def values(self):
-        return self._members_.values()
+        return self.__members__.values()
 
 
 if __name__ == '__main__':

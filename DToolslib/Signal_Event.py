@@ -121,6 +121,7 @@ class EventSignal:
         return instance.__signals__[self]
 
 
+"""
 if __name__ == '__main__':
     class Test:
         signal_instance_a = EventSignal(str)  # Instance Signal
@@ -139,3 +140,4 @@ if __name__ == '__main__':
     print(type(a.signal_class))  # output: <class '__main__.EventSignal'>
     print(a.__signals__)  # output: {...} a dict with 2 keys, the values are signal instances. You can also see the slots of the signal.
     print(a.__class_signals__)  # output: {...} a dict with 1 keys, the values are signal instances. You can also see the slots of the signal.
+"""

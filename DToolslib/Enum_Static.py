@@ -179,6 +179,7 @@ class StaticEnum(metaclass=_StaticEnumMeta):
         return self.__members__.values()
 
 
+""" 
 if __name__ == '__main__':
     class TestEnum(StaticEnum):
         A = '#ffffff'
@@ -193,3 +194,4 @@ if __name__ == '__main__':
     print(type(TestEnum.A))  # output: <class '__main__.SEString'>
     print('#ffffff' in TestEnum)  # output: True
     print(isinstance(TestEnum.A, str))  # output: True
+"""

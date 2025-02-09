@@ -1263,6 +1263,7 @@ class LoggerGroup(object):
         log_obj.signal_critical_message.disconnect(self.signal_critical_message)
 
 
+""" 
 if __name__ == '__main__':
     Log = Logger('test', os.path.dirname(__file__), log_level='info', size_limit=1024, doSplitByDay=True)
     Log_1 = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace', size_limit=1024, doSplitByDay=True)
@@ -1280,3 +1281,4 @@ if __name__ == '__main__':
     Log_1.warning('This is a warning message.')
     Log.error('This is a error message.')
     Log_1.critical('This is a critical message.')
+"""

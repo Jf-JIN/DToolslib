@@ -2,6 +2,7 @@
 from typing import Any, Callable
 import time
 import wrapt
+import sys
 
 
 @wrapt.decorator
@@ -18,5 +19,5 @@ def time_counter(func, instance, args, kwargs) -> Callable[..., tuple[Any, float
     start = time.perf_counter()
     result = func(*args, **kwargs)
     end = time.perf_counter()
-    print(f'[{func.__module__}] - [{func.__qualname__}]-[runTime]:\t', end - start)
+    sys.stdout.write(f'[\x1B[36m{func.__module__}\x1B[0m] - [\x1B[36m{func.__qualname__}\x1B[0m]-[\x1B[32mrunTime\x1B[0m]:\t \x1B[31m{(end - start)*1000} ms\x1B[0m\n')
     return result

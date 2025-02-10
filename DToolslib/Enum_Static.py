@@ -7,6 +7,7 @@
 默认: 枚举项.name 为枚举项名, 但仅限于枚举项的类型为
     - `int`, `float`, `str`, `list`, `tuple`, `set`, `frozenset`, `dict`, `complex`, `bytes`, `bytearray`
 """
+__all__ = ['StaticEnum']
 
 
 class _null:
@@ -45,23 +46,63 @@ class _itemBase:
         super().__setattr__(key, value)
 
 
+class _SEInteger(int, _itemBase):
+    pass
+
+
+class _SEFloat(float, _itemBase):
+    pass
+
+
+class _SEString(str, _itemBase):
+    pass
+
+
+class _SEList(list, _itemBase):
+    pass
+
+
+class _SETuple(tuple, _itemBase):
+    pass
+
+
+class _SESet(set, _itemBase):
+    pass
+
+
+class _SEFrozenSet(frozenset, _itemBase):
+    pass
+
+
+class _SEDictionary(dict, _itemBase):
+    pass
+
+
+class _SEComplexNumber(complex, _itemBase):
+    pass
+
+
+class _SEBytes(bytes, _itemBase):
+    pass
+
+
+class _SEByteArray(bytes, _itemBase):
+    pass
+
+
 _analog_define_dict = {
-    int: 'SEInteger',
-    float: 'SEFloat',
-    str: 'SEString',
-    list: 'SEList',
-    tuple: 'SETuple',
-    set: 'SESet',
-    frozenset: 'SEFrozenSet',
-    dict: 'SEDictionary',
-    complex: 'SEComplexNumber',
-    bytes: 'SEBytes',
-    bytearray: 'SEByteArray'
+    int: _SEInteger,
+    float: _SEFloat,
+    str: _SEString,
+    list: _SEList,
+    tuple: _SETuple,
+    set: _SESet,
+    frozenset: _SEFrozenSet,
+    dict: _SEDictionary,
+    complex: _SEComplexNumber,
+    bytes: _SEBytes,
+    bytearray: _SEByteArray
 }
-
-
-for type_, type_class in _analog_define_dict.items():
-    globals()[type_class] = type(type_class, (type_, _itemBase), {})
 
 
 class _StaticEnumDict(dict):
@@ -79,7 +120,7 @@ class _StaticEnumDict(dict):
             raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
         if (type(value) in _analog_define_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
             # 默认所有 __名称__ 的属性都是类的重要属性，不能被枚举项占用
-            value = eval(f'{_analog_define_dict[type(value)]}({repr(value)})')
+            value = _analog_define_dict[type(value)](value)
             value.name = key
         self._member_names[key] = value
         super().__setitem__(key, value)
@@ -106,7 +147,7 @@ class _StaticEnumMeta(type):
                 if isinstance(sub_value, type) and not issubclass(sub_value, StaticEnum) and sub_value is not value:
                     _convert_to_enum_item(sub_value, sub_key, sub_value)
                 if sub_key not in _object_attr and not (sub_key.startswith('__') and sub_key.endswith('__')) and type(sub_value) in _analog_define_dict:
-                    cls_dict[sub_key] = eval(f'{_analog_define_dict[type(sub_value)]}({repr(sub_value)})')
+                    cls_dict[sub_key] = _analog_define_dict[type(sub_value)](sub_value)
                     cls_dict[sub_key].name = sub_key
                     if hasattr(cls, '__allow_new_attr__') and cls.__allow_new_attr__:
                         flag_allow_new_attr = True
@@ -207,19 +248,19 @@ class StaticEnum(metaclass=_StaticEnumMeta):
         return self.__members__.values()
 
 
-"""
+""" 
 if __name__ == '__main__':
     class TestEnum(StaticEnum):
-        A = '#ffffff'
+        A = '#ff0000'
         A.color_name = 'Red'
         A.ansi_font = 31
         A.ansi_background = 41
 
-    print(TestEnum.A)  # output: #ffffff
+    print(TestEnum.A)  # output: #ff0000
     print(TestEnum.A.name)  # output: A
     print(TestEnum.A.color_name)  # output: Red
     print(TestEnum.A.ansi_font)  # output: 31
     print(type(TestEnum.A))  # output: <class '__main__.SEString'>
-    print('#ffffff' in TestEnum)  # output: True
+    print('#ff0000' in TestEnum)  # output: True
     print(isinstance(TestEnum.A, str))  # output: True
 """

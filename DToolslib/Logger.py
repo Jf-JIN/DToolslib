@@ -395,8 +395,8 @@ class Logger(object):
     - days_limit(int): 天数限制, 默认不限制
     - split_by_day(bool): 是否按天分割日志, 默认不分割
     - message_format(str): 消息格式, 可自定义, 详细方法见示例. 默认格式为: `%(consoleLine)s\\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\\n%(message)s\\n`
-    - exclude_funcs(list[str]): 排除的函数列表, 用于追溯调用位置时, 排除父级调用函数, 排除的函数链应是完整的, 只写顶层的函数名将可能不会产生效果, 默认为空列表
-    - exclude_classes(list[str]): 排除的类列表, 用于追溯调用位置时, 排除父级调用类, 默认为空列表
+    - exclude_funcs(list[str]): 排除的函数列表, 用于追溯调用位置时, 排除父级调用函数, 排除的函数链应是完整的, 只写顶层的函数名将可能不会产生效果, 默认为空列表, 当前可以和当前级类并写来更加精确地定位排除项, 如: ['ClassA.funcA']
+    - exclude_classes(list[str]): 排除的类列表, 用于追溯调用位置时, 排除父级调用类, 默认为空列表, 当前可以和当前级模块并写来更加精确地定位排除项, 如: ['ModuleA.ClassA']
     - exclude_modules(list[str]): 排除的模块列表, 用于追溯调用位置时, 排除父级调用模块, 默认为空列表
     - highlight_type(str|None): 高亮模式. 默认为 `ASNI`, 取消高亮则使用 None. 当前支持 `ASNI`, `HTML`
     - **kwargs, 消息格式中的自定义参数, 使用方法见示例
@@ -728,10 +728,14 @@ class Logger(object):
             unprefix_variable = fn.function.lstrip('__')
             temp_class_name = fn.frame.f_locals.get('self', None).__class__.__name__ if 'self' in fn.frame.f_locals else ''
             temp_module_name = os.path.splitext(os.path.basename(fn.filename))[0]
+            class_func_name = f'{temp_class_name}.{fn.function}'
+            module_class_name = f'{temp_module_name}.{temp_class_name}'
             if (
                 fn.function not in self.__exclude_funcs
+                and class_func_name not in self.__exclude_funcs
                 and f'_Logger__{unprefix_variable}' not in self.__exclude_funcs
                 and temp_class_name not in self.__exclude_classes
+                and module_class_name not in self.__exclude_classes
                 and temp_module_name not in self.__exclude_modules
             ):  # 不在排除列表中, 同时也排除当前类中的私有方法
                 caller_name = fn.function

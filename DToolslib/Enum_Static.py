@@ -41,7 +41,9 @@ class _itemBase:
     def __setattr__(self, key: str, value):
         if value is _null:
             return
-        if key in self.__dict__ or (hasattr(self, f'_{self.__class__.__name__}__attr_lock')):
+        if key == f'_{self.__class__.__name__}__attr_lock' and hasattr(self, f'_{self.__class__.__name__}__attr_lock') and getattr(self, f'_{self.__class__.__name__}__attr_lock'):
+            return
+        if (key in self.__dict__ and key != f'_{self.__class__.__name__}__attr_lock') or (hasattr(self, f'_{self.__class__.__name__}__attr_lock')):
             raise AttributeError(f'Enumeration items are immutable and cannot be modified: <{key}> = {value}')
         super().__setattr__(key, value)
 
@@ -167,7 +169,7 @@ class _StaticEnumMeta(type):
                 if isinstance(obj, _StaticEnumMeta):
                     _recursion_set_attr_lock(obj)
                     continue
-                setattr(obj, f'_{obj.__class__.__name__}__attr_lock', None)
+                setattr(obj, f'_{obj.__class__.__name__}__attr_lock', True)
 
         if len(bases) == 0:
             return super().__new__(mcs, name, bases, dct)

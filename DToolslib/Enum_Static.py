@@ -121,7 +121,7 @@ class _StaticEnumDict(dict):
         if key in self._member_names:
             raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
         if (type(value) in _analog_define_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
-            # 默认所有 __名称__ 的属性都是类的重要属性，不能被枚举项占用
+            # 默认所有 __名称__ 的属性都是类的重要属性, 不能被枚举项占用
             value = _analog_define_dict[type(value)](value)
             value.name = key
         self._member_names[key] = value
@@ -212,7 +212,7 @@ class StaticEnum(metaclass=_StaticEnumMeta):
     - 可以给枚举项添加属性, None和Boolean类型除外 You can add attributes to enumeration items except none and boolean types
     - 可以遍历, 使用keys(), 使用values(), 使用items() You can traverse, use keys(), use values(), and use items()
 
-    如果枚举类含有__allow_new_attr__属性, 则允许枚举类外部给枚举项添加新的属性，例如：
+    如果枚举类含有__allow_new_attr__属性, 则允许枚举类外部给枚举项添加新的属性, 例如: 
     If the enumeration class contains the __allow_new_attr__ attribute, it is allowed to add new attributes to enumeration items outside the enumeration class, for example:
 
     class MyEnum(StaticEnum):

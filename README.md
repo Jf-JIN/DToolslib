@@ -78,16 +78,25 @@ Logger, see docstring for details, support:
 
 - Clean old logs before startup to define the total number of retained
   启动前清理旧日志, 可定义保留总数
+  
 - Size splitting
   大小分割
+  
 - Days segmentation
   天数分割
-- Function traceability exclusion, class traceability exclusion, module traceability exclusion
-  函数追溯排除, 类追溯排除, 模块追溯排除
+  
+- Function traceability exclusion, class traceability exclusion, module traceability exclusion, for example: Exclude func1 function under ClassA class (assuming the relationship chain is: ClassA->func3->func2->func1), then log positioning will be located to func2
+  
+  
+  
+  函数追溯排除, 类追溯排除, 模块追溯排除, 例如: 排除 `ClassA` 类下的 `func1` 函数(假设关系链为:  `ClassA->func3->func2->func1` ), 则日志定位将定位到`func2`
+  
 - Output highlight styles and terminal color styles. After setting, you can obtain HTML style information through the signal.
   输出高亮样式, 终端彩色样式. 设置后, 可以通过信号获取 HTML 样式的信息
+  
 - Can track logging output
   可跟踪 logging 输出
+  
 - Can be output with a signal
   可通过信号针对性输出
 
@@ -163,3 +172,15 @@ Interior Decorators
                     计算函数/方法运行时间, 并打印
 - `who_called_me`: Get the call tree
                     获取调用树
+
+# 版本信息 Version Info
+
+#### v0.0.1.4
+
+* The new logger supports the exclusion of combined function names (such as `ClassA.func1`). Currently, only first-level combinations are supported, that is, the most recent class to which the method belongs must be consistent with the current class at the time of call.
+        新增日志器支持对组合函数名(如 `ClassA.func1`)的排除. 目前仅支持一级组合, 即方法所属的最近一级类必须与调用时的当前类一致. 
+* Fixed the issue that StaticEnum could add new properties outside, as well as the bug in data type errors in multi-layer nested classes inside.
+        修复 StaticEnum 可在外部新增属性的问题, 以及内部多层嵌套类的数据类型错误的 bug. 
+* Changed the way data types are converted in the StaticEnum metaclass, changed from the previous eval to created with the class.
+        更改了 StaticEnum 元类中转换数据类型的方式, 从之前的eval更改为用类创建. 
+

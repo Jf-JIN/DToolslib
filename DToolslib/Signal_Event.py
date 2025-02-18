@@ -33,12 +33,12 @@ class _RealSignal:
         required_types_count = len(self.__types)
         args_count = len(args)
         if required_types_count != args_count:
-            raise TypeError(f'LogSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.')
+            raise TypeError(f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.')
         for arg, (idx, required_type) in zip(args, enumerate(required_types)):
             if not isinstance(arg, required_type):
                 required_name = required_type.__name__
                 actual_name = type(arg).__name__
-                raise TypeError(f'LogSignal "{self.__name} {idx+1}th argument requires "{required_name}", got "{actual_name}" instead.')
+                raise TypeError(f'EventSignal "{self.__name} {idx+1}th argument requires "{required_name}", got "{actual_name}" instead.')
         slots = self.__slots
         for slot in slots:
             slot(*args, **kwargs)
@@ -49,10 +49,10 @@ class _RealSignal:
             if self.__isClassSignal
             else f"{self.__owner.__class__.__name__} object"
         )
-        return f'<Signal EventSignal {self.__name} of {owner_repr} at 0x{id(self.__owner):016X}>'
+        return f'<Signal EventSignal(slots:{len(self.__slots)}) {self.__name} of {owner_repr} at 0x{id(self.__owner):016X}>'
 
     def __repr__(self) -> str:
-        return f"\n{self.__str__()}\n    - slots:{self.__slots}\n"
+        return f"\n{self.__str__()}\n    - slots:{str(self.__slots).replace('_RealSignal', 'EventSignal')}\n"
 
     def __del__(self) -> None:
         self.__slots.clear()
@@ -92,7 +92,7 @@ class EventSignal:
                 return self.__handle_instance_signal(instance)
 
     def __set__(self, instance, value) -> None:
-        raise AttributeError('LogSignal is read-only, cannot be set')
+        raise AttributeError('EventSignal is read-only, cannot be set')
 
     def __set_name__(self, instance, name) -> None:
         self.__name = name
@@ -135,9 +135,9 @@ if __name__ == '__main__':
     a.signal_instance_a.disconnect(b.signal_instance_a)
 
     # output: This is a test message
-    print(a.signal_class is b.signal_class)  # output: True
-    print(a.signal_instance_a is b.signal_instance_a)  # output: False
-    print(type(a.signal_class))  # output: <class '__main__.EventSignal'>
-    print(a.__signals__)  # output: {...} a dict with 2 keys, the values are signal instances. You can also see the slots of the signal.
-    print(a.__class_signals__)  # output: {...} a dict with 1 keys, the values are signal instances. You can also see the slots of the signal.
+    print(f'\x1B[32mIs a.signal_class b.signal_class?\x1B[0m:\t{a.signal_class is b.signal_class}\n')  # output: True
+    print(f'\x1B[32mIs a.signal_instance_a b.signal_instance_a?\x1B[0m:\t{a.signal_instance_a is b.signal_instance_a}\n')  # output: False
+    print(f'\x1B[32mType of a.signal_class\x1B[0m:\t{type(a.signal_class)}\n')  # output: <class '__main__.EventSignal'>
+    print(f'\x1B[32mAll instance signals of a\x1B[0m:\t{a.__signals__}\n')  # output: {...} a dict with 2 keys, the values are signal instances. You can also see the slots of the signal.
+    print(f'\x1B[32mAll class signals of a\x1B[0m:\t{a.__class_signals__}\n')  # output: {...} a dict with 1 keys, the values are signal instances. You can also see the slots of the signal.
 """

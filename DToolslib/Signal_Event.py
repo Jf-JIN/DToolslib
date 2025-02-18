@@ -1,7 +1,7 @@
 from typing import Callable
 
 
-class _RealSignal:
+class _BoundSignal:
     __name__: str = 'EventSignal'
     __qualname__: str = 'EventSignal'
 
@@ -19,7 +19,7 @@ class _RealSignal:
         if callable(slot):
             if slot not in self.__slots:
                 self.__slots.append(slot)
-        elif isinstance(slot, _RealSignal):
+        elif isinstance(slot, _BoundSignal):
             self.__slots.append(slot.emit)
         else:
             raise ValueError('Slot must be callable')
@@ -52,7 +52,7 @@ class _RealSignal:
         return f'<Signal EventSignal(slots:{len(self.__slots)}) {self.__name} of {owner_repr} at 0x{id(self.__owner):016X}>'
 
     def __repr__(self) -> str:
-        return f"\n{self.__str__()}\n    - slots:{str(self.__slots).replace('_RealSignal', 'EventSignal')}\n"
+        return f"\n{self.__str__()}\n    - slots:{str(self.__slots).replace('_BoundSignal', 'EventSignal')}\n"
 
     def __del__(self) -> None:
         self.__slots.clear()
@@ -82,7 +82,7 @@ class EventSignal:
         self.__types = types
         self.__scope = signal_scope
 
-    def __get__(self, instance, instance_type) -> _RealSignal:
+    def __get__(self, instance, instance_type) -> _BoundSignal:
         if instance is None:
             return self
         else:
@@ -97,11 +97,11 @@ class EventSignal:
     def __set_name__(self, instance, name) -> None:
         self.__name = name
 
-    def __handle_class_signal(self, instance_type) -> _RealSignal:
+    def __handle_class_signal(self, instance_type) -> _BoundSignal:
         if not hasattr(instance_type, '__class_signals__'):
             instance_type.__class_signals__ = {}
         if self not in instance_type.__class_signals__:
-            instance_type.__class_signals__[self] = _RealSignal(
+            instance_type.__class_signals__[self] = _BoundSignal(
                 self.__types,
                 instance_type,
                 self.__name,
@@ -109,11 +109,11 @@ class EventSignal:
             )
         return instance_type.__class_signals__[self]
 
-    def __handle_instance_signal(self, instance) -> _RealSignal:
+    def __handle_instance_signal(self, instance) -> _BoundSignal:
         if not hasattr(instance, '__signals__'):
             instance.__signals__ = {}
         if self not in instance.__signals__:
-            instance.__signals__[self] = _RealSignal(
+            instance.__signals__[self] = _BoundSignal(
                 self.__types,
                 instance,
                 self.__name

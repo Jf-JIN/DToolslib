@@ -86,7 +86,7 @@ class LogLevel(_EnumBase):
     NOOUT = 70
 
 
-class _HighlightType(_EnumBase):
+class LogHighlightType(_EnumBase):
     """ 高亮类型枚举类 """
     ASNI = 'ASNI'
     HTML = 'HTML'
@@ -187,9 +187,9 @@ def html_ct(
     return output_text
 
 
-class _RealSignal:
-    __name__: str = '_LogSignal'
-    __qualname__: str = '_LogSignal'
+class _BoundSignal:
+    __name__: str = 'LogSignal'
+    __qualname__: str = 'LogSignal'
 
     def __init__(self, types, owner, name, isClassSignal=False):
         if all([isinstance(typ, (type, tuple)) for typ in types]):
@@ -205,12 +205,14 @@ class _RealSignal:
         if callable(slot):
             if slot not in self.__slots:
                 self.__slots.append(slot)
-        elif isinstance(slot, _RealSignal):
+        elif isinstance(slot, _BoundSignal):
             self.__slots.append(slot.emit)
         else:
             raise ValueError('Slot must be callable')
 
     def disconnect(self, slot):
+        if isinstance(slot, _BoundSignal):
+            slot = slot.emit
         if slot in self.__slots:
             self.__slots.remove(slot)
 
@@ -229,27 +231,29 @@ class _RealSignal:
         for slot in slots:
             slot(*args, **kwargs)
 
-    def __str__(self):
+    def __str__(self) -> str:
         owner_repr = (
             f"class {self.__owner.__name__}"
             if self.__isClassSignal
             else f"{self.__owner.__class__.__name__} object"
         )
-        return f'<Signal LogSignal {self.__name} of {owner_repr} at 0x{id(self.__owner):016X}>'
+        return f'<Signal LogSignal(slots: {self.__name} of {owner_repr} at 0x{id(self.__owner):016X}>'
 
-    def __repr__(self):
-        return f"\n{self.__str__()}\n    - slots:{self.__slots}\n"
+    def __repr__(self) -> str:
+        return f"\n{self.__str__()}\n    - slots({len(self.__slots)}):{str(self.__slots).replace('_BoundSignal', 'LogSignal')}\n"
 
     def __del__(self):
         self.__slots.clear()
 
 
 class _LogSignal:
+    __qualname__: str = 'LogSignal'
+
     def __init__(self, *types, level='instance'):
         self.types = types
         self.__level = level
 
-    def __get__(self, instance, instance_type) -> _RealSignal:
+    def __get__(self, instance, instance_type) -> _BoundSignal:
         if instance is None:
             return self
         else:
@@ -264,11 +268,11 @@ class _LogSignal:
     def __set_name__(self, instance, name):
         self.__name = name
 
-    def __handle_class_signal(self, instance_type) -> _RealSignal:
+    def __handle_class_signal(self, instance_type) -> _BoundSignal:
         if not hasattr(instance_type, '__class_signals__'):
             instance_type.__class_signals__ = {}
         if self not in instance_type.__class_signals__:
-            instance_type.__class_signals__[self] = _RealSignal(
+            instance_type.__class_signals__[self] = _BoundSignal(
                 self.types,
                 instance_type,
                 self.__name,
@@ -276,11 +280,11 @@ class _LogSignal:
             )
         return instance_type.__class_signals__[self]
 
-    def __handle_instance_signal(self, instance) -> _RealSignal:
+    def __handle_instance_signal(self, instance) -> _BoundSignal:
         if not hasattr(instance, '__signals__'):
             instance.__signals__ = {}
         if self not in instance.__signals__:
-            instance.__signals__[self] = _RealSignal(
+            instance.__signals__[self] = _BoundSignal(
                 self.types,
                 instance,
                 self.__name
@@ -370,9 +374,9 @@ class _LogMessageItem(object):
             highlight_type = self.__highlight_type
             if highlight_type is None:
                 return text
-        if highlight_type == _HighlightType.ASNI:
+        if highlight_type == LogHighlightType.ASNI:
             return asni_ct(text, *args, **kwargs)
-        elif highlight_type == _HighlightType.HTML:
+        elif highlight_type == LogHighlightType.HTML:
             return html_ct(text, *args, **kwargs)
         return text
 
@@ -391,7 +395,7 @@ class Logger(object):
     - console_output(bool): 是否输出到控制台, 默认输出
     - file_output(bool): 是否输出到文件, 默认输出
     - size_limit(int): 文件大小限制, 单位为 kB, 默认不限制. 此项无法限制单消息长度, 若单个消息长度超过设定值, 为了消息完整性, 即使大小超过限制值, 也会完整写入日志文件, 则当前文件大小将超过限制值
-    - count_limit(int): 文件数量限制, 默认不限制
+    - files_limit(int): 文件数量限制, 默认不限制
     - days_limit(int): 天数限制, 默认不限制
     - split_by_day(bool): 是否按天分割日志, 默认不分割
     - message_format(str): 消息格式, 可自定义, 详细方法见示例. 默认格式为: `%(consoleLine)s\\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\\n%(message)s\\n`
@@ -529,7 +533,7 @@ class Logger(object):
         console_output: bool = True,
         file_output: bool = True,
         size_limit: int = -1,  # KB
-        count_limit: int = -1,
+        files_limit: int = -1,
         days_limit: int = -1,
         split_by_day: bool = False,
         message_format: str = '%(consoleLine)s\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\n%(message)s\n',
@@ -560,7 +564,7 @@ class Logger(object):
         self.__log_level = _normalize_log_level(log_level)
         self.__default_level = _normalize_log_level(default_level)
         self.__size_limit = size_limit * 1000 if isinstance(size_limit, int) else -1
-        self.__count_limit = count_limit if isinstance(count_limit, int) else -1
+        self.__count_limit = files_limit if isinstance(files_limit, int) else -1
         self.__days_limit = days_limit if isinstance(days_limit, int) else -1
         self.__doSplitByDay = split_by_day if isinstance(split_by_day, bool) else False
         self.__message_format = message_format if isinstance(
@@ -568,7 +572,7 @@ class Logger(object):
         self.__exclude_funcs_list = exclude_funcs if isinstance(exclude_funcs, list) else []
         self.__exclude_classes_list = exclude_classes if isinstance(exclude_classes, list) else []
         self.__exclude_modules_list = exclude_modules if isinstance(exclude_modules, list) else []
-        self.__highlight_type = highlight_type if isinstance(highlight_type, (str, type(None))) and highlight_type in _HighlightType.values() else _HighlightType.NONE
+        self.__highlight_type = highlight_type if isinstance(highlight_type, (str, type(None))) and highlight_type in LogHighlightType.values() else LogHighlightType.NONE
         self.__kwargs = kwargs
         self.__dict__.update(kwargs)
         self.__init_params()
@@ -602,7 +606,7 @@ class Logger(object):
             self.__self_class_name,
             '_LoggingListener',
             '_LogSignal',
-            '_RealSignal',
+            '_BoundSignal',
             'RootLogger',
         }
         self.__exclude_modules = set()
@@ -800,6 +804,8 @@ class Logger(object):
         text = self.__message_format % used_messages + '\n'
         text_console = self.__message_format % used_messages_console + '\n'
         text_color = self.__message_format % used_messages_color + '\n'
+        if self.__highlight_type == LogHighlightType.HTML:
+            text_color = text_color.replace('\n', '<br>')
         return text, text_console, text_color, msg
 
     def __printf(self, message: str) -> None:
@@ -834,6 +840,8 @@ class Logger(object):
 # <file time> This log file is created at\t {file_time}.
 {'#'*66}\n\n{message}"""
             self.__current_size = len(message.encode('utf-8'))
+        if not os.path.exists(self.__current_log_folder_path):
+            os.makedirs(self.__current_log_folder_path)
         with open(self.__log_file_path, 'a', encoding='utf-8') as f:
             f.write(message)
 
@@ -941,7 +949,7 @@ class LoggerGroup(object):
     参数:
     - log_folder_path(str): 日志组文件夹路径
     - size_limit(int): 文件大小限制, 单位为 kB, 默认不限制. 此项无法限制单消息长度, 若单个消息长度超过设定值, 为了消息完整性, 即使大小超过限制值, 也会完整写入日志文件, 则当前文件大小将超过限制值
-    - count_limit(int): 文件数量限制, 默认不限制
+    - files_limit(int): 文件数量限制, 默认不限制
     - days_limit(int): 天数限制, 默认不限制
     - split_by_day(bool): 是否按天分割日志, 默认不分割
 
@@ -1031,8 +1039,9 @@ class LoggerGroup(object):
         self,
         log_folder_path: str = '',
         log_group: list = [],
+        exclude_logs: list = [],
         size_limit: int = -1,  # KB
-        count_limit: int = -1,
+        files_limit: int = -1,
         days_limit: int = -1,
         split_by_day: bool = False,
         file_output: bool = True,
@@ -1054,13 +1063,14 @@ class LoggerGroup(object):
                 f'\x1B[93m < WARNING > No File Output from \x1B[93;100m<LoggerGroup>\x1B[0m\n   \x1B[33m- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}\x1B[0m\n')
         self.__isNewFile = True
         self.__size_limit = size_limit * 1000 if isinstance(size_limit, int) else -1
-        self.__count_limit = count_limit if isinstance(count_limit, int) else -1
+        self.__count_limit = files_limit if isinstance(files_limit, int) else -1
         self.__days_limit = days_limit if isinstance(days_limit, int) else -1
         self.__doSplitByDay = split_by_day if isinstance(split_by_day, bool) else False
         self.__log_folder_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME)
         self.__current_size = 0
         self.__current_day = datetime.today().date()
         self.__log_group = []
+        self.__exclude_logs = exclude_logs if isinstance(exclude_logs, list) else []
         self.__initialized = False
         self.__set_log_file_path()
         self.set_log_group(log_group)
@@ -1083,13 +1093,17 @@ class LoggerGroup(object):
     def append_log(self, log_obj: Logger | list) -> None:
         if isinstance(log_obj, list | tuple):
             self.__log_group += list(log_obj)
+            for log in list(log_obj):
+                self.__connect_single(log)
         elif isinstance(log_obj, Logger):
             self.__log_group.append(log_obj)
+            self.__connect_single(log_obj)
         else:
             raise TypeError(f'log_obj must be list or Logger, but got {type(log_obj)}')
 
     def remove_log(self, log_obj: Logger) -> None:
         if isinstance(log_obj, Logger):
+            self.__log_group.remove(log_obj)
             self.__disconnect_single(log_obj)
         else:
             raise TypeError(f'log_obj must be Logger, but got {type(log_obj)}')
@@ -1104,6 +1118,8 @@ class LoggerGroup(object):
     def __connect_all(self) -> None:
         for log_obj in Logger.__instance_list__:
             log_obj: Logger
+            if log_obj in self.__exclude_logs:
+                continue
             self.__connect_single(log_obj)
 
     def __disconnect_all(self) -> None:
@@ -1111,18 +1127,20 @@ class LoggerGroup(object):
             log_obj: Logger
             self.__disconnect_single(log_obj)
 
-    def __disconnect(self, log_group) -> None:
-        for log_obj in self.__log_group:
-            log_obj: Logger
-            if log_obj in log_group:
-                self.__disconnect_single(log_obj)
-
     def __connection(self) -> None:
         if not self.__log_group:
             return
         for log_obj in self.__log_group:
             log_obj: Logger
+            if log_obj in self.__exclude_logs:
+                continue
             self.__connect_single(log_obj)
+
+    def __disconnect(self, log_group) -> None:
+        for log_obj in self.__log_group:
+            log_obj: Logger
+            if log_obj in log_group:
+                self.__disconnect_single(log_obj)
 
     def __set_log_file_path(self) -> None:
         """ 设置日志文件路径 """
@@ -1195,6 +1213,10 @@ class LoggerGroup(object):
 # <file time> This log file is created at\t {file_time}.
 {'#'*66}\n\n{message}"""
             self.__current_size = len(message.encode('utf-8'))
+        if not os.path.exists(self.__log_folder_path):
+            os.makedirs(self.__log_folder_path)
+        if not os.path.exists(self.__log_sub_folder_path):
+            os.makedirs(self.__log_sub_folder_path)
         with open(self.__log_file_path, 'a', encoding='utf-8') as f:
             f.write(message)
 

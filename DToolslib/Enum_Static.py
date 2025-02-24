@@ -163,9 +163,7 @@ class _StaticEnumMeta(type):
             setattr(cls, key, new_cls)
 
         def _recursion_set_attr_lock(cls):
-            for obj_name, obj in cls.__members__.items():
-                if obj_name == 'isAllowedSetValue':
-                    continue
+            for obj_name, obj in cls.__members__['data'].items():
                 if isinstance(obj, _StaticEnumMeta):
                     _recursion_set_attr_lock(obj)
                     continue
@@ -173,8 +171,10 @@ class _StaticEnumMeta(type):
 
         if len(bases) == 0:
             return super().__new__(mcs, name, bases, dct)
-        dct['__members__'] = {}  # 用于存储枚举项的字典
-        dct['isAllowedSetValue'] = False  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
+        dct['__members__'] = {  # 用于存储枚举项的字典
+            'isAllowedSetValue': False,  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
+            'data': {}  # 用于存储枚举项的值
+        }
         members = {key: value for key, value in dct.items() if not key.startswith('__')}
         cls = super().__new__(mcs, name, bases, dct)
         for key, value in members.items():
@@ -184,7 +184,7 @@ class _StaticEnumMeta(type):
                 _convert_to_enum_item(cls, key, value)
                 continue
             cls.__members__['isAllowedSetValue'] = True
-            cls.__members__[key] = value
+            cls.__members__['data'][key] = value
             setattr(cls, key, value)
         if not hasattr(cls, '__allow_new_attr__') or not cls.__allow_new_attr__:
             _recursion_set_attr_lock(cls)
@@ -192,17 +192,19 @@ class _StaticEnumMeta(type):
         return cls
 
     def __setattr__(cls, key, value):
-        if key in cls.__members__ and not cls.__members__['isAllowedSetValue']:
-            raise TypeError(f'Modification of the member "{key.__qualname__}" in the "{cls.__name__}" enumeration is not allowed. < {key.__qualname__} > = {cls.__members__[key]}')
+        if key in cls.__members__['data'] and not cls.__members__['isAllowedSetValue']:
+            ori = cls.__members__['data'][key]
+            raise TypeError(f'Modification of the member "{key.__qualname__}" in the "{cls.__name__}" enumeration is not allowed. < {key.__qualname__} > = {ori}')
         elif key not in cls.__members__ and not isinstance(value, type) and '__attr_lock' not in key and not cls.__members__['isAllowedSetValue']:
             raise TypeError(f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.')
         super().__setattr__(key, value)
 
     def __iter__(cls):
-        return iter(cls.__members__.values())
+
+        return iter(cls.__members__['data'].values())
 
     def __contains__(self, item) -> bool:
-        return item in self.__members__.values()
+        return item in self.__members__['data'].values()
 
 
 class StaticEnum(metaclass=_StaticEnumMeta):
@@ -226,28 +228,25 @@ class StaticEnum(metaclass=_StaticEnumMeta):
     """
     @classmethod
     def members(cls) -> list:
-        cls.__members__: dict
         temp = []
-        for key, value in cls.__members__.items():
-            if key == 'isAllowedSetValue' or key == '__members__':
-                continue
+        for key, value in cls.__members__['data'].items():
             temp.append((key, value))
         return temp
 
     def __hasattr__(self, item):
-        return item in self.__members__.keys()
+        return item in self.__members__['data'].keys()
 
     def __getattr__(self, item):
-        return self.__members__[item]
+        return self.__members__['data'][item]
 
     def items(self):
-        return self.__members__.items()
+        return self.__members__['data'].items()
 
     def keys(self):
-        return self.__members__.keys()
+        return self.__members__['data'].keys()
 
     def values(self):
-        return self.__members__.values()
+        return self.__members__['data'].values()
 
 
 """ 

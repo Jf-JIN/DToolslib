@@ -1,4 +1,5 @@
 import pprint
+import queue
 import sys
 import os
 import inspect
@@ -242,7 +243,7 @@ class _BoundSignal:
     def __repr__(self) -> str:
         return f"\n{self.__str__()}\n    - slots({len(self.__slots)}):{str(self.__slots).replace('_BoundSignal', 'LogSignal')}\n"
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.__slots.clear()
 
 
@@ -312,6 +313,9 @@ class _LoggingListener(logging.Handler):
             return
         self.__isInitialized = True
         super().__init__(level=level)
+
+    def set_level(self, level):
+        self.setLevel(level)
 
     def emit(self, record) -> None:
         level = record.levelno
@@ -389,61 +393,61 @@ class Logger(object):
     - log_name(str): 日志名称
     - log_path(str): 日志路径, 默认为无路径
     - log_sub_folder_name(str): 日志子文件夹名称, 默认'', 此时将以日志名称作为子文件夹名称
-    - log_level(str): 日志级别, 默认为 `INFO`
-        - `TRACE` | `DEBUG` | `INFO` | `WARNING` | `ERROR` | `CRITICAL`
+    - log_level(str): 日志级别, 默认为 `LogLevel.INFO`
     - default_level(str): 默认日志级别, 是直接调用类时执行的日志级别, 默认为`INFO`
-    - console_output(bool): 是否输出到控制台, 默认输出
-    - file_output(bool): 是否输出到文件, 默认输出
-    - size_limit(int): 文件大小限制, 单位为 kB, 默认不限制. 此项无法限制单消息长度, 若单个消息长度超过设定值, 为了消息完整性, 即使大小超过限制值, 也会完整写入日志文件, 则当前文件大小将超过限制值
-    - files_limit(int): 文件数量限制, 默认不限制
-    - days_limit(int): 天数限制, 默认不限制
-    - split_by_day(bool): 是否按天分割日志, 默认不分割
-    - message_format(str): 消息格式, 可自定义, 详细方法见示例. 默认格式为: `%(consoleLine)s\\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\\n%(message)s\\n`
-    - exclude_funcs(list[str]): 排除的函数列表, 用于追溯调用位置时, 排除父级调用函数, 排除的函数链应是完整的, 只写顶层的函数名将可能不会产生效果, 默认为空列表, 当前可以和当前级类并写来更加精确地定位排除项, 如: ['ClassA.funcA']
-    - exclude_classes(list[str]): 排除的类列表, 用于追溯调用位置时, 排除父级调用类, 默认为空列表, 当前可以和当前级模块并写来更加精确地定位排除项, 如: ['ModuleA.ClassA']
-    - exclude_modules(list[str]): 排除的模块列表, 用于追溯调用位置时, 排除父级调用模块, 默认为空列表
-    - highlight_type(str|None): 高亮模式. 默认为 `ASNI`, 取消高亮则使用 None. 当前支持 `ASNI`, `HTML`
+    - enableConsoleOutput(bool): 是否启用控制台输出, 默认为 `True`
+    - enableFileOutput(bool): 是否启用文件输出, 默认为 `True`
     - **kwargs, 消息格式中的自定义参数, 使用方法见示例
 
-
     信号:
-    - signal_all: 所有日志消息信号对象, 用于在类外部接收所有日志类的日志消息
-    - signal_all_color: 所有日志消息信号对象, 用于在类外部接收所有日志类的日志消息, 并带有颜色高亮
-    - signal_all_console: 所有日志消息信号对象, 用于在类外部接收所有日志类的日志消息, 并带有控制台高亮
-    - signal_all_message: 所有日志消息信号对象, 用于在类外部接收所有日志类的日志消息, 仅为消息内容
-    - signal_trace: trace 级别日志消息信号对象, 用于在类外部接收 trace 级别的日志消息
-    - signal_trace_color: trace 级别日志消息信号对象, 用于在类外部接收 trace 级别的日志消息, 并带有颜色高亮
-    - signal_trace_console: trace 级别日志消息信号对象, 用于在类外部接收 trace 级别的日志消息, 并带有控制台高亮
-    - signal_trace_message: trace 级别日志消息信号对象, 用于在类外部接收 trace 级别的日志消息, 仅为消息内容
-    - signal_debug: debug 级别日志消息信号对象, 用于在类外部接收 debug 级别的日志消息
-    - signal_debug_color: debug 级别日志消息信号对象, 用于在类外部接收 debug 级别的日志消息, 并带有颜色高亮
-    - signal_debug_console: debug 级别日志消息信号对象, 用于在类外部接收 debug 级别的日志消息, 并带有控制台高亮
-    - signal_debug_message: debug 级别日志消息信号对象, 用于在类外部接收 debug 级别的日志消息, 仅为消息内容
-    - signal_info: info 级别日志消息信号对象, 用于在类外部接收 info 级别的日志消息
-    - signal_info_color: info 级别日志消息信号对象, 用于在类外部接收 info 级别的日志消息, 并带有颜色高亮
-    - signal_info_console: info 级别日志消息信号对象, 用于在类外部接收 info 级别的日志消息, 并带有控制台高亮
-    - signal_info_message: info 级别日志消息信号对象, 用于在类外部接收 info 级别的日志消息, 仅为消息内容
-    - signal_warning: warning 级别日志消息信号对象, 用于在类外部接收 warning 级别的日志消息
-    - signal_warning_color: warning 级别日志消息信号对象, 用于在类外部接收 warning 级别的日志消息, 并带有颜色高亮
-    - signal_warning_console: warning 级别日志消息信号对象, 用于在类外部接收 warning 级别的日志消息, 并带有控制台高亮
-    - signal_warning_message: warning 级别日志消息信号对象, 用于在类外部接收 warning 级别的日志消息, 仅为消息内容
-    - signal_error: error 级别日志消息信号对象, 用于在类外部接收 error 级别的日志消息
-    - signal_error_color: error 级别日志消息信号对象, 用于在类外部接收 error 级别的日志消息, 并带有颜色高亮
-    - signal_error_console: error 级别日志消息信号对象, 用于在类外部接收 error 级别的日志消息, 并带有控制台高亮
-    - signal_error_message: error 级别日志消息信号对象, 用于在类外部接收 error 级别的日志消息, 仅为消息内容
-    - signal_critical: critical 级别日志消息信号对象, 用于在类外部接收 critical 级别的日志消息
-    - signal_critical_color: critical 级别日志消息信号对象, 用于在类外部接收 critical 级别的日志消息, 并带有颜色高亮
-    - signal_critical_console: critical 级别日志消息信号对象, 用于在类外部接收 critical 级别的日志消息, 并带有控制台高亮
-    - signal_critical_message: critical 级别日志消息信号对象, 用于在类外部接收 critical 级别的日志消息, 仅为消息内容
+    - 说明:
+        - xxx:日志消息, 含有格式
+        - xxx_color: 带有颜色高亮
+        - xxx_console: 带有控制台高亮
+        - xxx_message: 仅为消息内容, 无格式内容
+    - 所有日志消息信号对象
+        - `signal_all` `signal_all_color` `signal_all_console` `signal_all_message`
+    - `trace` 级别日志消息信号对象
+        - `signal_trace` `signal_trace_color` `signal_trace_console` `signal_trace_message`
+    - `debug` 级别日志消息信号对象
+        - `signal_debug` `signal_debug_color` `signal_debug_console` `signal_debug_message`
+    - `info` 级别日志消息信号对象
+        - `signal_info` `signal_info_color` `signal_info_console` `signal_info_message`
+    - `warning` 级别日志消息信号对象
+        - `signal_warning` `signal_warning_color` `signal_warning_console` `signal_warning_message`
+    - `error` 级别日志消息信号对象
+        - `signal_error` `signal_error_color` `signal_error_console` `signal_error_message`
+    - `critical` 级别日志消息信号对象
+        - `signal_critical` `signal_critical_color` `signal_critical_console` `signal_critical_message`
 
     方法:
-    - trace(*message) # 输出追踪信息, 支持多参数
-    - debug(*message) # 输出调试信息, 支持多参数
-    - info(*message)  # 输出普通信息, 支持多参数
-    - warning(*message)  # 输出警告信息, 支持多参数
-    - error(*message)  # 输出错误信息, 支持多参数
-    - critical(*message)  # 输出严重错误信息, 支持多参数
-    - exception(*message)  # 输出异常信息, 支持多参数
+    - trace(*message): 输出追踪信息, 支持多参数
+    - debug(*message): 输出调试信息, 支持多参数
+    - info(*message): 输出普通信息, 支持多参数
+    - warning(*message): 输出警告信息, 支持多参数
+    - error(*message): 输出错误信息, 支持多参数
+    - critical(*message): 输出严重错误信息, 支持多参数
+    - exception(*message): 输出异常信息, 支持多参数
+    - set_listen_logging(logger_name, level): 设置对 `logging` 模块的监听
+    - set_exclude_funcs(funcs_list): 设置要排除的函数列表
+    - set_exclude_classes(classes_list): 设置要排除的类列表
+    - set_modules(modules_list): 设置要排除的模块列表
+    - add_exclude_func(func_name): 添加要排除的函数
+    - add_exclude_class(cls_name): 添加要排除的类
+    - add_exclude_module(module_name): 添加要排除的模块
+    - remove_exclude_func(func_name): 移除要排除的函数
+    - remove_exclude_class(cls_name): 移除要排除的类
+    - remove_exclude_module(module_name): 移除要排除的模块
+    - set_default_level(default_level): 设置默认日志级别, 用于 直接调用类时的日志输出级别
+    - set_level(log_level): 设置日志级别
+    - setEnableDailySplit(enable_flag): 设置是否按天分割日志文件
+    - setEnableConsoleOutput(enable_flag): 设置是否输出到控制台
+    - setEnableFileOutput(enable_flag): 设置是否输出到文件
+    - set_file_size_limit_kB(size_limit): 设置文件大小限制, 单位为KB
+    - set_file_count_limit(count_limit): 设置文件数量限制
+    - set_file_days_limit(days_limit): 设置文件保存天数限制
+    - set_message_format(message_format): 设置日志消息格式
+    - set_highlight_type(highlight_type): 设置日志消息高亮类型
 
     示例:
     1. 通常调用:
@@ -480,9 +484,6 @@ class Logger(object):
 
     得到输出: `2025-01-01 06:30:00-INFO -debug message -True`
     """
-    __logging_listening_level_int__ = 100
-    __logging_listener_handler = _LoggingListener(0)
-    __logging_listener = logging.getLogger()
     signal_all = _LogSignal(str)
     signal_all_color = _LogSignal(str)
     signal_all_console = _LogSignal(str)
@@ -530,21 +531,10 @@ class Logger(object):
         log_sub_folder_name: str = '',
         log_level: str | int = LogLevel.INFO,
         default_level: str | int = LogLevel.INFO,
-        console_output: bool = True,
-        file_output: bool = True,
-        size_limit: int = -1,  # KB
-        files_limit: int = -1,
-        days_limit: int = -1,
-        split_by_day: bool = False,
-        message_format: str = '%(consoleLine)s\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\n%(message)s\n',
-        exclude_funcs: list = [],
-        exclude_classes: list = [],
-        exclude_modules: list = [],
-        highlight_type: str | None = None,
+        enableConsoleOutput: bool = True,
+        enableFileOutput: bool = True,
         ** kwargs,
     ) -> None:
-        self.__doConsoleOutput = console_output if isinstance(console_output, bool) else True
-        self.__doFileOutput = file_output if isinstance(file_output, bool) else True
         self.__log_name = log_name
         if not isinstance(log_folder_path, str):
             raise ValueError(f'<WARNING> Log folder path "{log_folder_path}" is not a string.')
@@ -555,26 +545,22 @@ class Logger(object):
         elif log_folder_path:
             raise FileNotFoundError(f'Log folder path "{log_folder_path}" does not exist, create it.')
         else:
-            self.__printf(
-                f'\x1B[93m < WARNING > No File Output from \x1B[93;100m<{self.__log_name}>\x1B[0m\n   \x1B[33m- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}\x1B[0m\n')
+            warning_text = (
+                asni_ct('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
+                asni_ct(self.__log_name+'\n   ', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
+                asni_ct(
+                    f'- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}', _ColorMap.YELLOW.ANSI_TXT)
+            )
+            sys.stdout.write(warning_text)
         self.__log_sub_folder_name = log_sub_folder_name if isinstance(log_sub_folder_name, str) and log_sub_folder_name else self.__log_name
         if self.__log_sub_folder_name in self.__class__.__logger_folder_name_list__:
             raise ValueError(f'<WARNING> Log sub-folder name "{self.__log_sub_folder_name}" is already in use.')
         self.__class__.__logger_folder_name_list__.append(self.__log_sub_folder_name)
-        self.__log_level = _normalize_log_level(log_level)
-        self.__default_level = _normalize_log_level(default_level)
-        self.__size_limit = size_limit * 1000 if isinstance(size_limit, int) else -1
-        self.__count_limit = files_limit if isinstance(files_limit, int) else -1
-        self.__days_limit = days_limit if isinstance(days_limit, int) else -1
-        self.__doSplitByDay = split_by_day if isinstance(split_by_day, bool) else False
-        self.__message_format = message_format if isinstance(
-            message_format, str) else '%(consoleLine)s\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\n%(message)s\n'
-        self.__exclude_funcs_list = exclude_funcs if isinstance(exclude_funcs, list) else []
-        self.__exclude_classes_list = exclude_classes if isinstance(exclude_classes, list) else []
-        self.__exclude_modules_list = exclude_modules if isinstance(exclude_modules, list) else []
-        self.__highlight_type = highlight_type if isinstance(highlight_type, (str, type(None))) and highlight_type in LogHighlightType.values() else LogHighlightType.NONE
-        self.__kwargs = kwargs
-        self.__dict__.update(kwargs)
+        self.__log_level: LogLevel = _normalize_log_level(log_level)
+        self.__default_level: LogLevel = _normalize_log_level(default_level)
+        self.__enableConsoleOutput: bool = enableConsoleOutput if isinstance(enableConsoleOutput, bool) else True
+        self.__enableFileOutput: bool = enableFileOutput if isinstance(enableFileOutput, bool) else True
+        self.__kwargs: dict = kwargs
         self.__init_params()
         self.__clear_files()
 
@@ -592,9 +578,18 @@ class Logger(object):
             'scriptPath': _LogMessageItem('scriptPath', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
             'consoleLine': _LogMessageItem('consoleLine', font_color=_ColorMap.RED.name, highlight_type=self.__highlight_type, italic=True),
         }
+        self.__limit_single_file_size_Bytes = -1
+        self.__limit_files_count = -1
+        self.__limit_files_days = -1
+        self.__message_format = '%(consoleLine)s\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\n%(message)s\n'
+        self.__highlight_type = LogHighlightType.NONE
+        self.__dict__.update(self.__kwargs)
+        self.__message_queue = queue.Queue()
+        self.__enableDailySplit = False
+        self.__isWriting = False
         self.__self_class_name: str = self.__class__.__name__
         self.__self_module_name: str = os.path.splitext(os.path.basename(__file__))[0]
-        self.__start_time = datetime.now()
+        self.__start_time_log = datetime.now()
         for key, value in self.__kwargs.items():
             if key not in self.__var_dict:
                 self.__var_dict[key] = _LogMessageItem(key, font_color=_ColorMap.CYAN.name)
@@ -611,12 +606,6 @@ class Logger(object):
         }
         self.__exclude_modules = set()
         # self.__exclude_modules.add(self.__self_module_name)
-        for item in self.__exclude_funcs_list:
-            self.__exclude_funcs.add(item)
-        for item in self.__exclude_classes_list:
-            self.__exclude_classes.add(item)
-        for item in self.__exclude_modules_list:
-            self.__exclude_modules.add(item)
         self.__current_size = 0
         self.__current_day = datetime.today().date()
         self.__isNewFile = True
@@ -629,7 +618,7 @@ class Logger(object):
             LogLevel.ERROR: _LogMessageItem('levelName', text='ERROR', font_color=_ColorMap.WHITE.name, background_color=_ColorMap.LIGHTRED.name, highlight_type=self.__highlight_type, bold=True),
             LogLevel.CRITICAL: _LogMessageItem('levelName', text='CRITICAL', font_color=_ColorMap.LIGHTYELLOW.name, background_color=_ColorMap.RED.name, highlight_type=self.__highlight_type, bold=True, blink=True),
         }
-        listen_level_dict = {
+        self.__log_level_translation_dict = {
             LogLevel.NOTSET: LogLevel.NOTSET,
             LogLevel.TRACE: LogLevel.NOTSET,
             LogLevel.DEBUG: LogLevel.TRACE,
@@ -639,17 +628,6 @@ class Logger(object):
             LogLevel.CRITICAL: LogLevel.ERROR,
             LogLevel.NOOUT: LogLevel.ERROR
         }
-        if self.__class__.__logging_listening_level_int__ >= 100:
-            self.__logging_listener_handler.signal_trace.connect(self._trace)
-            self.__logging_listener_handler.signal_debug.connect(self._debug)
-            self.__logging_listener_handler.signal_info.connect(self._info)
-            self.__logging_listener_handler.signal_warning.connect(self._warning)
-            self.__logging_listener_handler.signal_error.connect(self._error)
-            self.__logging_listener_handler.signal_critical.connect(self._critical)
-            self.__logging_listener.addHandler(self.__logging_listener_handler)
-        if self.__log_level <= self.__class__.__logging_listening_level_int__:
-            self.__logging_listener.setLevel(listen_level_dict[self.__log_level])
-            self.__class__.__logging_listening_level_int__ = self.__log_level
 
     def __set_log_file_path(self) -> None:
         """ 设置日志文件路径 """
@@ -657,7 +635,7 @@ class Logger(object):
         if self.__isExistsPath is False:
             return
         if not hasattr(self, '_Logger__log_file_path'):  # 初始化, 创建属性
-            self.__start_time_format = self.__start_time.strftime("%Y%m%d_%H'%M'%S")
+            self.__start_time_format = self.__start_time_log.strftime("%Y%m%d_%H'%M'%S")
             self.__current_log_folder_path = os.path.join(self.__log_path, self.__log_sub_folder_name)
             if not os.path.exists(self.__current_log_folder_path):
                 os.makedirs(self.__current_log_folder_path)
@@ -696,7 +674,7 @@ class Logger(object):
         """
         if self.__isExistsPath is False:
             return
-        if (not isinstance(self.__count_limit, int) and self.__count_limit < 0) or (not isinstance(self.__days_limit, int) and self.__days_limit <= 0):
+        if (not isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) or (not isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
             return
         self.__current_log_folder_path = os.path.join(self.__log_path, self.__log_sub_folder_name)
         if not os.path.exists(self.__current_log_folder_path):
@@ -708,14 +686,14 @@ class Logger(object):
                 current_file_list.append(fp)
         length_file_list = len(current_file_list)
         # 清理超过文件数量限制的文件
-        if (isinstance(self.__count_limit, int) and self.__count_limit >= 0) and length_file_list > self.__count_limit:
+        if (isinstance(self.__limit_files_count, int) and self.__limit_files_count >= 0) and length_file_list > self.__limit_files_count:
             sorted_files = sorted(current_file_list, key=os.path.getctime)
-            for file_path in sorted_files[:length_file_list - self.__count_limit]:
+            for file_path in sorted_files[:length_file_list - self.__limit_files_count]:
                 os.remove(file_path)
         # 清理超过天数限制的文件
-        elif isinstance(self.__days_limit, int) and self.__days_limit > 0:
+        elif isinstance(self.__limit_files_days, int) and self.__limit_files_days > 0:
             for file_path in current_file_list:
-                if (datetime.today() - datetime.fromtimestamp(os.path.getctime(file_path))).days > self.__days_limit:
+                if (datetime.today() - datetime.fromtimestamp(os.path.getctime(file_path))).days > self.__limit_files_days:
                     os.remove(file_path)
 
     def __find_caller(self) -> dict:
@@ -810,21 +788,21 @@ class Logger(object):
 
     def __printf(self, message: str) -> None:
         """ 打印日志信息 """
-        if not self.__doConsoleOutput:
+        if not self.__enableConsoleOutput:
             return
         sys.stdout.write(message)
 
     def __write(self, message: str) -> None:
         """ 写入日志信息 """
-        if not self.__doFileOutput or self.__isExistsPath is False:
+        if not self.__enableFileOutput or self.__isExistsPath is False:
             return
-        if self.__size_limit and self.__size_limit > 0:
+        if self.__limit_single_file_size_Bytes and self.__limit_single_file_size_Bytes > 0:
             # 大小限制
             writting_size = len(message.encode('utf-8'))
             self.__current_size += writting_size
-            if self.__current_size >= self.__size_limit:
+            if self.__current_size >= self.__limit_single_file_size_Bytes:
                 self.__isNewFile = True
-        if self.__doSplitByDay:
+        if self.__enableDailySplit:
             # 按天分割
             if datetime.today().date() != self.__current_day:
                 self.__isNewFile = True
@@ -834,26 +812,37 @@ class Logger(object):
             self.__set_log_file_path()
             self.__current_day = datetime.today().date()
             file_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            start_time = self.__start_time.strftime('%Y-%m-%d %H:%M:%S')
+            start_time = self.__start_time_log.strftime('%Y-%m-%d %H:%M:%S')
             message = f"""{'#'*66}
 # <start time> This Program is started at\t {start_time}.
 # <file time> This log file is created at\t {file_time}.
 {'#'*66}\n\n{message}"""
             self.__current_size = len(message.encode('utf-8'))
-        if not os.path.exists(self.__current_log_folder_path):
-            os.makedirs(self.__current_log_folder_path)
+        # 清理旧日志文件
+        self.__clear_files()
+        # 写入新日志文件
         with open(self.__log_file_path, 'a', encoding='utf-8') as f:
             f.write(message)
 
     def __output(self, level, *args, **kwargs) -> tuple:
-        text, text_console, text_color, msg = self.__format(level, *args)
-        self.__write(text)
-        self.__printf(text_console)
-        self.signal_all.emit(text)
-        self.signal_all_color.emit(text_color)
-        self.signal_all_console.emit(text_console)
-        self.signal_all_message.emit(msg)
+        res = self.__format(level, *args)
+        text, text_console, text_color, msg = res
+        self.__message_queue.put(res)
+        if not self.__isWriting:
+            self.__isWriting = True
+            self.__write_and_broadcast()
         return text, text_console, text_color, msg
+
+    def __write_and_broadcast(self):
+        while not self.__message_queue.empty():
+            text, text_console, text_color, msg = self.__message_queue.get()
+            self.__write(text)
+            self.__printf(text_console)
+            self.signal_all.emit(text)
+            self.signal_all_color.emit(text_color)
+            self.signal_all_console.emit(text_console)
+            self.signal_all_message.emit(msg)
+        self.__isWriting = False
 
     def _trace(self, *args, _sender=None, **kwargs) -> None:
         """ 打印追踪信息 """
@@ -941,6 +930,107 @@ class Logger(object):
         exception_str += '\n'
         self.error(exception_str, *args, **kwargs)
 
+    def set_listen_logging(self, logger_name: str = '', level: LogLevel = LogLevel.NOTSET):
+        if hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler'):
+            self.__logging_listener_handler = _LoggingListener(self.__log_level_translation_dict[level])
+            self.__logging_listener: logging.Logger = logging.getLogger(logger_name)
+            self.__logging_listener_handler.signal_trace.connect(self._trace)
+            self.__logging_listener_handler.signal_debug.connect(self._debug)
+            self.__logging_listener_handler.signal_info.connect(self._info)
+            self.__logging_listener_handler.signal_warning.connect(self._warning)
+            self.__logging_listener_handler.signal_error.connect(self._error)
+            self.__logging_listener_handler.signal_critical.connect(self._critical)
+            self.__logging_listener.addHandler(self.__logging_listener_handler)
+        else:
+            self.__logging_listener_handler.set_level(self.__log_level_translation_dict[level])
+        self.__logging_listener.setLevel(self.__log_level_translation_dict[level])
+
+    def set_exclude_funcs(self, funcs_list: list) -> None:
+        self.__exclude_funcs.clear()
+        self.__exclude_funcs.update(self.__class__.__dict__.keys())
+        self.__exclude_funcs.difference_update(dir(object))
+        for item in funcs_list:
+            self.__exclude_funcs.add(item)
+
+    def set_exclude_classes(self, classes_list: list) -> None:
+        self.__exclude_classes: set = {
+            self.__self_class_name,
+            '_LoggingListener',
+            '_LogSignal',
+            '_BoundSignal',
+            'RootLogger',
+        }
+        for item in classes_list:
+            self.__exclude_classes.add(item)
+
+    def set_modules(self, modules_list: list) -> None:
+        self.__exclude_modules.clear()
+        # self.__exclude_modules.add(self.__self_module_name)
+        for item in modules_list:
+            self.__exclude_modules.add(item)
+
+    def add_exclude_func(self, func_name: str) -> None:
+        self.__exclude_funcs.add(func_name)
+
+    def add_exclude_class(self, cls_name: str) -> None:
+        self.__exclude_classes.add(cls_name)
+
+    def add_exclude_module(self, module_name: str) -> None:
+        self.__exclude_modules.add(module_name)
+
+    def remove_exclude_func(self, func_name: str) -> None:
+        self.__exclude_funcs.discard(func_name)
+
+    def remove_exclude_class(self, cls_name: str) -> None:
+        self.__exclude_classes.discard(cls_name)
+
+    def remove_exclude_module(self, module_name: str) -> None:
+        self.__exclude_modules.discard(module_name)
+
+    def set_default_level(self, default_level: LogLevel) -> None:
+        self.__default_level = default_level
+
+    def set_level(self, log_level: LogLevel) -> None:
+        self.__log_level = _normalize_log_level(log_level)
+
+    def setEnableDailySplit(self, enable_flag: bool) -> None:
+        if not isinstance(enable_flag, bool):
+            raise TypeError("enable_flag must be bool")
+        self.__enableDailySplit = enable_flag
+
+    def setEnableConsoleOutput(self, enable_flag: bool) -> None:
+        if not isinstance(enable_flag, bool):
+            raise TypeError("enable_flag must be bool")
+        self.__enableConsoleOutput = enable_flag
+
+    def setEnableFileOutput(self, enable_flag: bool) -> None:
+        if not isinstance(enable_flag, bool):
+            raise TypeError("enable_flag must be bool")
+        self.__enableFileOutput = enable_flag
+
+    def set_file_size_limit_kB(self, size_limit: int) -> None:
+        if not isinstance(size_limit, int):
+            raise TypeError("size_limit must be int")
+        self.__limit_single_file_size_Bytes = size_limit * 1000
+
+    def set_file_count_limit(self, count_limit: int) -> None:
+        if not isinstance(count_limit, int):
+            raise TypeError("count_limit must be int")
+        self.__limit_files_count = count_limit
+
+    def set_file_days_limit(self, days_limit: int) -> None:
+        if not isinstance(days_limit, int):
+            raise TypeError("days_limit must be int")
+        self.__limit_files_days = days_limit
+
+    def set_message_format(self, message_format: str) -> None:
+        if not isinstance(message_format, str):
+            raise TypeError("message_format must be str")
+        self.__message_format = message_format
+
+    def set_highlight_type(self, highlight_type: LogHighlightType) -> None:
+        self.__highlight_type = highlight_type
+
 
 class LoggerGroup(object):
     """
@@ -948,10 +1038,11 @@ class LoggerGroup(object):
 
     参数:
     - log_folder_path(str): 日志组文件夹路径
-    - size_limit(int): 文件大小限制, 单位为 kB, 默认不限制. 此项无法限制单消息长度, 若单个消息长度超过设定值, 为了消息完整性, 即使大小超过限制值, 也会完整写入日志文件, 则当前文件大小将超过限制值
-    - files_limit(int): 文件数量限制, 默认不限制
-    - days_limit(int): 天数限制, 默认不限制
-    - split_by_day(bool): 是否按天分割日志, 默认不分割
+    - limit_single_file_size_kB(int): 文件大小限制, 单位为 kB, 默认不限制. 此项无法限制单消息长度, 若单个消息长度超过设定值, 为了消息完整性, 即使大小超过限制值, 也会完整写入日志文件, 则当前文件大小将超过限制值
+    - limit_files_count(int): 文件数量限制, 默认不限制
+    - limit_files_days(int): 天数限制, 默认不限制
+    - enableDailySplit(bool): 是否按天分割日志, 默认不分割
+    - enableFileOutput(bool): 是否启用文件输出, 默认启用
 
     信号:
     - signal_all: 公共日志消息信号对象, 用于在类外部接收所有日志类的日志消息
@@ -1040,17 +1131,17 @@ class LoggerGroup(object):
         log_folder_path: str = '',
         log_group: list = [],
         exclude_logs: list = [],
-        size_limit: int = -1,  # KB
-        files_limit: int = -1,
-        days_limit: int = -1,
-        split_by_day: bool = False,
-        file_output: bool = True,
+        limit_single_file_size_kB: int = -1,  # KB
+        limit_files_count: int = -1,
+        limit_files_days: int = -1,
+        enableDailySplit: bool = False,
+        enableFileOutput: bool = True,
     ) -> None:
         if self.__isInitialized:
             # sys.stdout.write(f'\x1B[93m <Warning> LoggerGroup initialization is already complete. Reinitialization is invalid.\x1B[0m\n')
             return
         self.__isInitialized = True
-        self.__doFileOutput = file_output if isinstance(file_output, bool) else True
+        self.__enableFileOutput = enableFileOutput if isinstance(enableFileOutput, bool) else True
         self.__start_time = datetime.now()
         self.__log_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME) if log_folder_path else ''
         self.__isExistsPath = False
@@ -1062,10 +1153,10 @@ class LoggerGroup(object):
             sys.stdout.write(
                 f'\x1B[93m < WARNING > No File Output from \x1B[93;100m<LoggerGroup>\x1B[0m\n   \x1B[33m- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}\x1B[0m\n')
         self.__isNewFile = True
-        self.__size_limit = size_limit * 1000 if isinstance(size_limit, int) else -1
-        self.__count_limit = files_limit if isinstance(files_limit, int) else -1
-        self.__days_limit = days_limit if isinstance(days_limit, int) else -1
-        self.__doSplitByDay = split_by_day if isinstance(split_by_day, bool) else False
+        self.__limit_single_file_size_Bytes: int = limit_single_file_size_kB * 1000 if isinstance(limit_single_file_size_kB, int) else -1
+        self.__limit_files_count = limit_files_count if isinstance(limit_files_count, int) else -1
+        self.__limit_files_days = limit_files_days if isinstance(limit_files_days, int) else -1
+        self.__enableDailySplit = enableDailySplit if isinstance(enableDailySplit, bool) else False
         self.__log_folder_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME)
         self.__current_size = 0
         self.__current_day = datetime.today().date()
@@ -1165,7 +1256,7 @@ class LoggerGroup(object):
         """
         if self.__isExistsPath is False:
             return
-        if (not isinstance(self.__count_limit, int) and self.__count_limit < 0) or (not isinstance(self.__days_limit, int) and self.__days_limit <= 0):
+        if (not isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) or (not isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
             return
         current_folder_path = os.path.join(self.__log_folder_path, _LOG_GROUP_FOLDER_NAME)
         if not os.path.exists(current_folder_path):
@@ -1177,27 +1268,27 @@ class LoggerGroup(object):
                 current_file_list.append(fp)
         length_file_list = len(current_file_list)
         # 清理超过文件数量限制的文件
-        if (isinstance(self.__count_limit, int) and self.__count_limit >= 0) and length_file_list > self.__count_limit:
+        if (isinstance(self.__limit_files_count, int) and self.__limit_files_count >= 0) and length_file_list > self.__limit_files_count:
             sorted_files = sorted(current_file_list, key=os.path.getctime)
-            for file_path in sorted_files[:length_file_list - self.__count_limit]:
+            for file_path in sorted_files[:length_file_list - self.__limit_files_count]:
                 os.remove(file_path)
         # 清理超过天数限制的文件
-        elif isinstance(self.__days_limit, int) and self.__days_limit > 0:
+        elif isinstance(self.__limit_files_days, int) and self.__limit_files_days > 0:
             for file_path in current_file_list:
-                if (datetime.today() - datetime.fromtimestamp(os.path.getctime(file_path))).days > self.__days_limit:
+                if (datetime.today() - datetime.fromtimestamp(os.path.getctime(file_path))).days > self.__limit_files_days:
                     os.remove(file_path)
 
     def __write(self, message: str) -> None:
         """ 写入日志信息 """
-        if not self.__doFileOutput or self.__isExistsPath is False:
+        if not self.__enableFileOutput or self.__isExistsPath is False:
             return
-        if self.__size_limit and self.__size_limit > 0:
+        if self.__limit_single_file_size_Bytes and self.__limit_single_file_size_Bytes > 0:
             # 大小限制
             writting_size = len(message.encode('utf-8'))
             self.__current_size += writting_size
-            if self.__current_size >= self.__size_limit:
+            if self.__current_size >= self.__limit_single_file_size_Bytes:
                 self.__isNewFile = True
-        if self.__doSplitByDay:
+        if self.__enableDailySplit:
             # 按天分割
             if datetime.today().date() != self.__current_day:
                 self.__isNewFile = True
@@ -1217,6 +1308,7 @@ class LoggerGroup(object):
             os.makedirs(self.__log_folder_path)
         if not os.path.exists(self.__log_sub_folder_path):
             os.makedirs(self.__log_sub_folder_path)
+        self.__clear_files()
         with open(self.__log_file_path, 'a', encoding='utf-8') as f:
             f.write(message)
 
@@ -1291,8 +1383,12 @@ class LoggerGroup(object):
 
 """ 
 if __name__ == '__main__':
-    Log = Logger('test', os.path.dirname(__file__), log_level='info', size_limit=1024, doSplitByDay=True)
-    Log_1 = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace', size_limit=1024, doSplitByDay=True)
+    Log = Logger('test', os.path.dirname(__file__), log_level='info')
+    Log.set_file_size_limit_kB(1024)
+    Log.setEnableDailySplit(True)
+    Log_1 = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace')
+    Log_1.set_file_size_limit_kB(1024)
+    Log_1.setEnableDailySplit(True)
     Log.signal_debug_message.connect(print)
     Logger_group = LoggerGroup(os.path.dirname(__file__))
     logging.debug('hello world from logging debug')  # logging 跟踪示例

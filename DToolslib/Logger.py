@@ -431,7 +431,7 @@ class Logger(object):
     - set_listen_logging(logger_name, level): 设置对 `logging` 模块的监听
     - set_exclude_funcs(funcs_list): 设置要排除的函数列表
     - set_exclude_classes(classes_list): 设置要排除的类列表
-    - set_modules(modules_list): 设置要排除的模块列表
+    - set_exclude_modules(modules_list): 设置要排除的模块列表
     - add_exclude_func(func_name): 添加要排除的函数
     - add_exclude_class(cls_name): 添加要排除的类
     - add_exclude_module(module_name): 添加要排除的模块
@@ -476,7 +476,9 @@ class Logger(object):
 
     - 如需添加自定义的参数, 可以在初始化中添加, 并可以在后续对相应的属性进行赋值
 
-    logger = Logger(log_name='test', log_path='D:/test', message_format='%(asctime)s-%(levelName)s -%(message)s -%(happyNewYear)s', happyNewYear=False)
+    logger = Logger(log_name='test', log_folder_path='D:/test', happyNewYear=False)
+
+    logger.set_message_format('%(asctime)s-%(levelName)s -%(message)s -%(happyNewYear)s')
 
     logger.happyNewYear = True
 
@@ -565,19 +567,7 @@ class Logger(object):
         self.__clear_files()
 
     def __init_params(self) -> None:
-        self.__var_dict = {  # 日志变量字典
-            'logName': _LogMessageItem('logName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'asctime': _LogMessageItem('asctime', font_color=_ColorMap.GREEN.name, highlight_type=self.__highlight_type, bold=True),
-            'moduleName': _LogMessageItem('moduleName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'functionName': _LogMessageItem('functionName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'className': _LogMessageItem('className', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'levelName': _LogMessageItem('levelName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'lineNum': _LogMessageItem('lineNum', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'message': _LogMessageItem('message'),
-            'scriptName': _LogMessageItem('scriptName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'scriptPath': _LogMessageItem('scriptPath', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
-            'consoleLine': _LogMessageItem('consoleLine', font_color=_ColorMap.RED.name, highlight_type=self.__highlight_type, italic=True),
-        }
+
         self.__limit_single_file_size_Bytes = -1
         self.__limit_files_count = -1
         self.__limit_files_days = -1
@@ -590,6 +580,19 @@ class Logger(object):
         self.__self_class_name: str = self.__class__.__name__
         self.__self_module_name: str = os.path.splitext(os.path.basename(__file__))[0]
         self.__start_time_log = datetime.now()
+        self.__var_dict: dict = {  # 日志变量字典
+            'logName': _LogMessageItem('logName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'asctime': _LogMessageItem('asctime', font_color=_ColorMap.GREEN.name, highlight_type=self.__highlight_type, bold=True),
+            'moduleName': _LogMessageItem('moduleName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'functionName': _LogMessageItem('functionName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'className': _LogMessageItem('className', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'levelName': _LogMessageItem('levelName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'lineNum': _LogMessageItem('lineNum', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'message': _LogMessageItem('message'),
+            'scriptName': _LogMessageItem('scriptName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'scriptPath': _LogMessageItem('scriptPath', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
+            'consoleLine': _LogMessageItem('consoleLine', font_color=_ColorMap.RED.name, highlight_type=self.__highlight_type, italic=True),
+        }
         for key, value in self.__kwargs.items():
             if key not in self.__var_dict:
                 self.__var_dict[key] = _LogMessageItem(key, font_color=_ColorMap.CYAN.name)
@@ -833,7 +836,7 @@ class Logger(object):
             self.__write_and_broadcast()
         return text, text_console, text_color, msg
 
-    def __write_and_broadcast(self):
+    def __write_and_broadcast(self) -> None:
         while not self.__message_queue.empty():
             text, text_console, text_color, msg = self.__message_queue.get()
             self.__write(text)
@@ -845,7 +848,7 @@ class Logger(object):
         self.__isWriting = False
 
     def _trace(self, *args, _sender=None, **kwargs) -> None:
-        """ 打印追踪信息 """
+        # 此类方法主要为了分离 _sender 参数, 防止外部误传
         if self.__log_level > LogLevel.TRACE and _sender != '_LoggingListener':
             return
         text, text_console, text_color, msg = self.__output(LogLevel.TRACE, *args, **kwargs)
@@ -855,7 +858,6 @@ class Logger(object):
         self.signal_trace_message.emit(msg)
 
     def _debug(self, *args, _sender=None, **kwargs) -> None:
-        """ 打印调试信息 """
         if self.__log_level > LogLevel.DEBUG and _sender != '_LoggingListener':
             return
         text, text_console, text_color, msg = self.__output(LogLevel.DEBUG, *args, **kwargs)
@@ -865,7 +867,6 @@ class Logger(object):
         self.signal_debug_message.emit(msg)
 
     def _info(self, *args, _sender=None, **kwargs) -> None:
-        """ 打印信息 """
         if self.__log_level > LogLevel.INFO and _sender != '_LoggingListener':
             return
         text, text_console, text_color, msg = self.__output(LogLevel.INFO, *args, **kwargs)
@@ -875,7 +876,6 @@ class Logger(object):
         self.signal_info_message.emit(msg)
 
     def _warning(self, *args, _sender=None, **kwargs) -> None:
-        """ 打印警告信息 """
         if self.__log_level > LogLevel.WARNING and _sender != '_LoggingListener':
             return
         text, text_console, text_color, msg = self.__output(LogLevel.WARNING, *args, **kwargs)
@@ -885,7 +885,6 @@ class Logger(object):
         self.signal_warning_message.emit(msg)
 
     def _error(self, *args, _sender=None, **kwargs) -> None:
-        """ 打印错误信息 """
         if self.__log_level > LogLevel.ERROR and _sender != '_LoggingListener':
             return
         text, text_console, text_color, msg = self.__output(LogLevel.ERROR, *args, **kwargs)
@@ -895,7 +894,6 @@ class Logger(object):
         self.signal_error_message.emit(msg)
 
     def _critical(self, *args, _sender=None, **kwargs) -> None:
-        """ 打印严重错误信息 """
         if self.__log_level > LogLevel.CRITICAL and _sender != '_LoggingListener':
             return
         text, text_console, text_color, msg = self.__output(LogLevel.CRITICAL, *args, **kwargs)
@@ -905,21 +903,27 @@ class Logger(object):
         self.signal_critical_message.emit(msg)
 
     def trace(self, *args, **kwargs) -> None:
+        """ 打印追踪信息 """
         self._trace(*args, **kwargs)
 
     def debug(self, *args, **kwargs) -> None:
+        """ 打印调试信息 """
         self._debug(*args, **kwargs)
 
     def info(self, *args, **kwargs) -> None:
+        """ 打印信息 """
         self._info(*args, **kwargs)
 
     def warning(self, *args, **kwargs) -> None:
+        """ 打印警告信息 """
         self._warning(*args, **kwargs)
 
     def error(self, *args, **kwargs) -> None:
+        """ 打印错误信息 """
         self._error(*args, **kwargs)
 
     def critical(self, *args, **kwargs) -> None:
+        """ 打印严重错误信息 """
         self._critical(*args, **kwargs)
 
     def exception(self, *args, **kwargs) -> None:
@@ -930,8 +934,8 @@ class Logger(object):
         exception_str += '\n'
         self.error(exception_str, *args, **kwargs)
 
-    def set_listen_logging(self, logger_name: str = '', level: LogLevel = LogLevel.NOTSET):
-        if hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler'):
+    def set_listen_logging(self, logger_name: str = '', level: LogLevel = LogLevel.NOTSET) -> None:
+        if not hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler'):
             self.__logging_listener_handler = _LoggingListener(self.__log_level_translation_dict[level])
             self.__logging_listener: logging.Logger = logging.getLogger(logger_name)
             self.__logging_listener_handler.signal_trace.connect(self._trace)
@@ -946,6 +950,12 @@ class Logger(object):
         self.__logging_listener.setLevel(self.__log_level_translation_dict[level])
 
     def set_exclude_funcs(self, funcs_list: list) -> None:
+        """ 
+        设置需要排除的函数 
+
+        参数:
+        - funcs_list(list[str]): 需要排除的函数列表, 列表中的元素为函数名(str)
+        """
         self.__exclude_funcs.clear()
         self.__exclude_funcs.update(self.__class__.__dict__.keys())
         self.__exclude_funcs.difference_update(dir(object))
@@ -953,6 +963,12 @@ class Logger(object):
             self.__exclude_funcs.add(item)
 
     def set_exclude_classes(self, classes_list: list) -> None:
+        """ 
+        设置需要排除的类
+
+        参数:
+        - classes_list(list[str]): 需要排除的类列表, 列表中的元素为类名(str)
+        """
         self.__exclude_classes: set = {
             self.__self_class_name,
             '_LoggingListener',
@@ -963,73 +979,194 @@ class Logger(object):
         for item in classes_list:
             self.__exclude_classes.add(item)
 
-    def set_modules(self, modules_list: list) -> None:
+    def set_exclude_modules(self, modules_list: list) -> None:
+        """ 
+        设置需要排除的模块
+
+        参数:
+        - modules_list(list[str]): 需要排除的模块列表, 列表中的元素为模块名(str)
+        """
         self.__exclude_modules.clear()
         # self.__exclude_modules.add(self.__self_module_name)
         for item in modules_list:
             self.__exclude_modules.add(item)
 
     def add_exclude_func(self, func_name: str) -> None:
+        """ 
+        添加需要排除的函数
+
+        参数:
+        - func_name(str): 需要排除的函数名
+        """
         self.__exclude_funcs.add(func_name)
 
     def add_exclude_class(self, cls_name: str) -> None:
+        """ 
+        添加需要排除的类
+
+        参数:
+        - cls_name(str): 需要排除的类名
+        """
         self.__exclude_classes.add(cls_name)
 
     def add_exclude_module(self, module_name: str) -> None:
+        """ 
+        添加需要排除的模块
+
+        参数:
+        - module_name(str): 需要排除的模块名
+        """
         self.__exclude_modules.add(module_name)
 
     def remove_exclude_func(self, func_name: str) -> None:
+        """ 
+        移除需要排除的函数
+
+        参数:
+        - func_name(str): 需要排除的函数名
+        """
         self.__exclude_funcs.discard(func_name)
 
     def remove_exclude_class(self, cls_name: str) -> None:
+        """ 
+        移除需要排除的类
+
+        参数:
+        - cls_name(str): 需要排除的类名
+        """
         self.__exclude_classes.discard(cls_name)
 
     def remove_exclude_module(self, module_name: str) -> None:
+        """ 
+        移除需要排除的模块
+
+        参数:
+        - module_name(str): 需要排除的模块名
+        """
         self.__exclude_modules.discard(module_name)
 
     def set_default_level(self, default_level: LogLevel) -> None:
+        """ 
+        设置默认日志级别
+
+        参数:
+        - default_level(LogLevel): 默认日志级别
+        """
         self.__default_level = default_level
 
     def set_level(self, log_level: LogLevel) -> None:
+        """ 
+        设置日志级别
+
+        参数:
+        - log_level(LogLevel): 日志级别
+        """
         self.__log_level = _normalize_log_level(log_level)
 
     def setEnableDailySplit(self, enable_flag: bool) -> None:
-        if not isinstance(enable_flag, bool):
-            raise TypeError("enable_flag must be bool")
+        """ 
+        设置是否启用按天分割日志
+
+        参数:
+        - enable_flag(bool): 是否启用按天分割日志        
+        """
         self.__enableDailySplit = enable_flag
 
     def setEnableConsoleOutput(self, enable_flag: bool) -> None:
-        if not isinstance(enable_flag, bool):
-            raise TypeError("enable_flag must be bool")
+        """ 
+        设置是否启用控制台输出
+
+        参数:
+        - enable_flag(bool): 是否启用控制台输出
+        """
         self.__enableConsoleOutput = enable_flag
 
     def setEnableFileOutput(self, enable_flag: bool) -> None:
-        if not isinstance(enable_flag, bool):
-            raise TypeError("enable_flag must be bool")
+        """ 
+        设置是否启用文件输出
+
+        参数:
+        - enable_flag(bool): 是否启用文件输出
+        """
         self.__enableFileOutput = enable_flag
 
-    def set_file_size_limit_kB(self, size_limit: int) -> None:
-        if not isinstance(size_limit, int):
+    def set_file_size_limit_kB(self, size_limit: int | float) -> None:
+        """ 
+        设置单个日志文件大小限制
+
+        参数:
+        - size_limit(int | float): 单个日志文件大小限制, 单位为KB
+        """
+        if not isinstance(size_limit, (int, float)):
             raise TypeError("size_limit must be int")
-        self.__limit_single_file_size_Bytes = size_limit * 1000
+        self.__limit_single_file_size_Bytes: int | float = size_limit * 1000
 
     def set_file_count_limit(self, count_limit: int) -> None:
+        """ 
+        设置文件夹中日志文件数量限制
+
+        参数: 
+        - count_limit(int): 文件夹中日志文件数量限制
+        """
         if not isinstance(count_limit, int):
             raise TypeError("count_limit must be int")
-        self.__limit_files_count = count_limit
+        self.__limit_files_count: int = count_limit
 
     def set_file_days_limit(self, days_limit: int) -> None:
+        """ 
+        设置文件夹中日志文件天数限制
+
+        参数: 
+        - days_limit(int): 文件夹中日志文件天数限制
+        """
         if not isinstance(days_limit, int):
             raise TypeError("days_limit must be int")
-        self.__limit_files_days = days_limit
+        self.__limit_files_days: int = days_limit
 
     def set_message_format(self, message_format: str) -> None:
+        """ 
+        设置日志消息格式
+
+        参数:
+        - message_format(str): 日志消息格式
+
+        提供的默认格式参数有:
+        - `asctime` 当前时间
+        - `moduleName` 模块名称
+        - `functionName` 函数/方法名称
+        - `className` 类名称
+        - `levelName` 当前日志级别
+        - `lineNum` 代码行号
+        - `message` 消息内容
+        - `scriptName` 脚本名称
+        - `scriptPath` 脚本路径
+        - `consoleLine` 控制台链接行
+
+        如需添加自定义的参数, 可以需初始化中添加并赋值, 并可以在后续对相应的属性值进行修改
+
+        logger = Logger(log_name='test', log_folder_path='D:/test', happyNewYear=False)
+
+        logger.set_message_format('%(asctime)s-%(levelName)s -%(message)s -%(happyNewYear)s')
+
+        logger.happyNewYear = True
+
+        logger.debug('debug message')
+
+        得到输出: `2025-01-01 06:30:00-INFO -debug message -True`
+
+        """
         if not isinstance(message_format, str):
             raise TypeError("message_format must be str")
         self.__message_format = message_format
 
     def set_highlight_type(self, highlight_type: LogHighlightType) -> None:
-        self.__highlight_type = highlight_type
+        """ 
+        设置日志消息高亮类型
+
+        参数:
+        - highlight_type(LogHighlightType): 日志消息高亮类型
+        """
+        self.__highlight_type: LogHighlightType = highlight_type
 
 
 class LoggerGroup(object):
@@ -1045,34 +1182,25 @@ class LoggerGroup(object):
     - enableFileOutput(bool): 是否启用文件输出, 默认启用
 
     信号:
-    - signal_all: 公共日志消息信号对象, 用于在类外部接收所有日志类的日志消息
-    - signal_all_color: 公共日志消息信号对象, 用于在类外部接收所有日志类的日志消息, 并带有颜色高亮
-    - signal_all_console: 公共日志消息信号对象, 用于在类外部接收所有日志类的日志消息, 并带有控制台高亮
-    - signal_all_message: 公共日志消息信号对象, 用于在类外部接收所有日志类的日志消息, 仅为消息内容
-    - signal_trace: trace 级别公共日志消息信号对象, 用于在类外部接收 trace 级别的日志消息
-    - signal_trace_color: trace 级别公共日志消息信号对象, 用于在类外部接收 trace 级别的日志消息, 并带有颜色高亮
-    - signal_trace_console: trace 级别公共日志消息信号对象, 用于在类外部接收 trace 级别的日志消息, 并带有控制台高亮
-    - signal_trace_message: trace 级别公共日志消息信号对象, 用于在类外部接收 trace 级别的日志消息, 仅为消息内容
-    - signal_debug: debug 级别公共日志消息信号对象, 用于在类外部接收 debug 级别的日志消息
-    - signal_debug_color: debug 级别公共日志消息信号对象, 用于在类外部接收 debug 级别的日志消息, 并带有颜色高亮
-    - signal_debug_console: debug 级别公共日志消息信号对象, 用于在类外部接收 debug 级别的日志消息, 并带有控制台高亮
-    - signal_debug_message: debug 级别公共日志消息信号对象, 用于在类外部接收 debug 级别的日志消息, 仅为消息内容
-    - signal_info: info 级别公共日志消息信号对象, 用于在类外部接收 info 级别的日志消息
-    - signal_info_color: info 级别公共日志消息信号对象, 用于在类外部接收 info 级别的日志消息, 并带有颜色高亮
-    - signal_info_console: info 级别公共日志消息信号对象, 用于在类外部接收 info 级别的日志消息, 并带有控制台高亮
-    - signal_info_message: info 级别公共日志消息信号对象, 用于在类外部接收 info 级别的日志消息, 仅为消息内容
-    - signal_warning: warning 级别公共日志消息信号对象, 用于在类外部接收 warning 级别的日志消息
-    - signal_warning_color: warning 级别公共日志消息信号对象, 用于在类外部接收 warning 级别的日志消息, 并带有颜色高亮
-    - signal_warning_console: warning 级别公共日志消息信号对象, 用于在类外部接收 warning 级别的日志消息, 并带有控制台高亮
-    - signal_warning_message: warning 级别公共日志消息信号对象, 用于在类外部接收 warning 级别的日志消息, 仅为消息内容
-    - signal_error: error 级别公共日志消息信号对象, 用于在类外部接收 error 级别的日志消息
-    - signal_error_color: error 级别公共日志消息信号对象, 用于在类外部接收 error 级别的日志消息, 并带有颜色高亮
-    - signal_error_console: error 级别公共日志消息信号对象, 用于在类外部接收 error 级别的日志消息, 并带有控制台高亮
-    - signal_error_message: error 级别公共日志消息信号对象, 用于在类外部接收 error 级别的日志消息, 仅为消息内容
-    - signal_critical: critical 级别公共日志消息信号对象, 用于在类外部接收 critical 级别的日志消息
-    - signal_critical_color: critical 级别公共日志消息信号对象, 用于在类外部接收 critical 级别的日志消息, 并带有颜色高亮
-    - signal_critical_console: critical 级别公共日志消息信号对象, 用于在类外部接收 critical 级别的日志消息, 并带有控制台高亮
-    - signal_critical_message: critical 级别公共日志消息信号对象, 用于在类外部接收 critical 级别的日志消息, 仅为消息内容
+    - 说明:
+        - xxx:日志消息, 含有格式
+        - xxx_color: 带有颜色高亮
+        - xxx_console: 带有控制台高亮
+        - xxx_message: 仅为消息内容, 无格式内容
+    - 所有日志消息信号对象
+        - `signal_all` `signal_all_color` `signal_all_console` `signal_all_message`
+    - `trace` 级别日志消息信号对象
+        - `signal_trace` `signal_trace_color` `signal_trace_console` `signal_trace_message`
+    - `debug` 级别日志消息信号对象
+        - `signal_debug` `signal_debug_color` `signal_debug_console` `signal_debug_message`
+    - `info` 级别日志消息信号对象
+        - `signal_info` `signal_info_color` `signal_info_console` `signal_info_message`
+    - `warning` 级别日志消息信号对象
+        - `signal_warning` `signal_warning_color` `signal_warning_console` `signal_warning_message`
+    - `error` 级别日志消息信号对象
+        - `signal_error` `signal_error_color` `signal_error_console` `signal_error_message`
+    - `critical` 级别日志消息信号对象
+        - `signal_critical` `signal_critical_color` `signal_critical_console` `signal_critical_message`
 
     方法:
     - set_log_group
@@ -1141,7 +1269,8 @@ class LoggerGroup(object):
             # sys.stdout.write(f'\x1B[93m <Warning> LoggerGroup initialization is already complete. Reinitialization is invalid.\x1B[0m\n')
             return
         self.__isInitialized = True
-        self.__enableFileOutput = enableFileOutput if isinstance(enableFileOutput, bool) else True
+        self.__enableFileOutput = enableFileOutput
+        self.__enableDailySplit = enableDailySplit
         self.__start_time = datetime.now()
         self.__log_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME) if log_folder_path else ''
         self.__isExistsPath = False
@@ -1156,7 +1285,6 @@ class LoggerGroup(object):
         self.__limit_single_file_size_Bytes: int = limit_single_file_size_kB * 1000 if isinstance(limit_single_file_size_kB, int) else -1
         self.__limit_files_count = limit_files_count if isinstance(limit_files_count, int) else -1
         self.__limit_files_days = limit_files_days if isinstance(limit_files_days, int) else -1
-        self.__enableDailySplit = enableDailySplit if isinstance(enableDailySplit, bool) else False
         self.__log_folder_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME)
         self.__current_size = 0
         self.__current_day = datetime.today().date()
@@ -1383,10 +1511,11 @@ class LoggerGroup(object):
 
 """ 
 if __name__ == '__main__':
-    Log = Logger('test', os.path.dirname(__file__), log_level='info')
+    Log = Logger('Log', os.path.dirname(__file__), log_level='info')
     Log.set_file_size_limit_kB(1024)
     Log.setEnableDailySplit(True)
-    Log_1 = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace')
+    Log.set_listen_logging(level=LogLevel.INFO)
+    Log_1 = Logger('Log_1', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level=LogLevel.TRACE)
     Log_1.set_file_size_limit_kB(1024)
     Log_1.setEnableDailySplit(True)
     Log.signal_debug_message.connect(print)

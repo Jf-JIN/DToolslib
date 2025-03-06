@@ -384,6 +384,9 @@ class _LogMessageItem(object):
             return html_ct(text, *args, **kwargs)
         return text
 
+    def set_highlight_type(self, highlight_type: LogHighlightType) -> None:
+        self.__highlight_type: LogHighlightType = highlight_type
+
 
 class Logger(object):
     """
@@ -935,7 +938,14 @@ class Logger(object):
         self.error(exception_str, *args, **kwargs)
 
     def set_listen_logging(self, logger_name: str = '', level: LogLevel = LogLevel.NOTSET) -> None:
-        if not hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler'):
+        """ 
+        设置监听日志
+
+        参数:
+        - logger_name: 被监听的日志名称
+        - level: 监听级别
+        """
+        if not (hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler') and hasattr(self, f'_{self.__class__.__name__}__logging_listener')):
             self.__logging_listener_handler = _LoggingListener(self.__log_level_translation_dict[level])
             self.__logging_listener: logging.Logger = logging.getLogger(logger_name)
             self.__logging_listener_handler.signal_trace.connect(self._trace)
@@ -948,6 +958,11 @@ class Logger(object):
         else:
             self.__logging_listener_handler.set_level(self.__log_level_translation_dict[level])
         self.__logging_listener.setLevel(self.__log_level_translation_dict[level])
+
+    def remove_listen_logging(self) -> None:
+        """ 移除监听日志 """
+        if hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler') and hasattr(self, f'_{self.__class__.__name__}__logging_listener'):
+            self.__logging_listener.removeHandler(self.__logging_listener_handler)
 
     def set_exclude_funcs(self, funcs_list: list) -> None:
         """ 
@@ -1167,6 +1182,9 @@ class Logger(object):
         - highlight_type(LogHighlightType): 日志消息高亮类型
         """
         self.__highlight_type: LogHighlightType = highlight_type
+        for item in self.__var_dict.values():
+            item: _LogMessageItem
+            item.set_highlight_type(highlight_type)
 
 
 class LoggerGroup(object):
@@ -1321,11 +1339,12 @@ class LoggerGroup(object):
             raise TypeError(f'log_obj must be list or Logger, but got {type(log_obj)}')
 
     def remove_log(self, log_obj: Logger) -> None:
-        if isinstance(log_obj, Logger):
+        # print(self.__log_group)
+        if not isinstance(log_obj, Logger):
+            raise TypeError(f'log_obj must be Logger, but got {type(log_obj)}')
+        if log_obj in self.__log_group:
             self.__log_group.remove(log_obj)
             self.__disconnect_single(log_obj)
-        else:
-            raise TypeError(f'log_obj must be Logger, but got {type(log_obj)}')
         if len(self.__log_group) == 0:
             self.__connect_all()
 

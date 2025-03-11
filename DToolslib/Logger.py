@@ -300,18 +300,8 @@ class _LoggingListener(logging.Handler):
     signal_warning = _LogSignal(str)
     signal_error = _LogSignal(str)
     signal_critical = _LogSignal(str)
-    __instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if not cls.__instance:
-            cls.__instance = super().__new__(cls)
-            cls.__instance.__isInitialized = False
-        return cls.__instance
 
     def __init__(self, level) -> None:
-        if self.__isInitialized:
-            return
-        self.__isInitialized = True
         super().__init__(level=level)
 
     def set_level(self, level):
@@ -569,8 +559,29 @@ class Logger(object):
         self.__init_params()
         self.__clear_files()
 
-    def __init_params(self) -> None:
+    def __del__(self):
+        if hasattr(Logger, '__logger_folder_name_list__'):
+            try:
+                Logger.__logger_folder_name_list__.remove(self.__log_sub_folder_name)
+            except ValueError:
+                pass
 
+        if hasattr(Logger, '__instance_list__'):
+            try:
+                Logger.__instance_list__.remove(self)
+            except ValueError:
+                pass
+
+        if hasattr(Logger, '__logger_name_list__'):
+            try:
+                Logger.__logger_name_list__.remove(self.__log_name)
+            except ValueError:
+                pass
+
+    def __repr__(self):
+        return f'Logger<"{self.__log_name}"> with level <{self.__log_level}"{self.__level_color_dict[self.__log_level].text}"> at 0x{id(self):016x}'
+
+    def __init_params(self) -> None:
         self.__limit_single_file_size_Bytes = -1
         self.__limit_files_count = -1
         self.__limit_files_days = -1
@@ -1339,7 +1350,6 @@ class LoggerGroup(object):
             raise TypeError(f'log_obj must be list or Logger, but got {type(log_obj)}')
 
     def remove_log(self, log_obj: Logger) -> None:
-        # print(self.__log_group)
         if not isinstance(log_obj, Logger):
             raise TypeError(f'log_obj must be Logger, but got {type(log_obj)}')
         if log_obj in self.__log_group:

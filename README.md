@@ -103,7 +103,7 @@ Logger, see docstring for details, support:
 ###### How to use | 使用方法
 
 ```python
-Log = Logger('test', os.path.dirname(__file__), log_level='info', size_limit=1024, doSplitByDay=True)
+Log = Logger('test', os.path.dirname(__file__), log_level='info')
 Log.signal_debug_message.connect(print)
 logging.debug('hello world from logging debug') # logging tracking example
 Log.trace('This is a trace message.')
@@ -135,8 +135,8 @@ Logger group, see docstring for details, support
 ###### How to use | 使用方法
 
 ```python
-Log = Logger('test', os.path.dirname(__file__), log_level='info', size_limit=1024, doSplitByDay=True)
-Log_1 = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace', size_limit=1024, doSplitByDay=True)
+Log = Logger('test', os.path.dirname(__file__), log_level='info')
+Log_1 = Logger('tests', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level='trace')
 Logger_group = LoggerGroup(os.path.dirname(__file__))
 Log.info('This is a info message.')
 Log_1.warning('This is a warning message.')
@@ -175,12 +175,49 @@ Interior Decorators
 
 # 版本信息 Version Info
 
+#### v0.0.1.5
+
+* Fixed the error message of EventSignal signal class
+        修正 EventSignal 信号类的报错信息
+* Fixed the issue where numerical values and in-class flags were mixed in iter of StaticEnum
+        修复StaticEnum中数值和类内标志混合在iter中的问题
+* Fixed a bug where disconnecting an EventSignal signal failed when the slot was another signal
+        修改 EventSignal 信号断开连接时, slot 为信号时无法断开的 bug
+* Modified the actual connection signal class name in EventSignal
+        修改 EventSignal 实际连接信号类名 
+* Added the display of the number of slot functions when printing EventSignal signals. It will be easier to debug
+        增加打印EventSignal 信号时对槽函数数量的显示, 便于调试 
+* Modified the highlight enumeration class LogHighlightType to public access
+        更改高亮枚举类 LogHighlightType 为公共访问
+* Added a check in Logger and LoggerGroup to verify whether the log folder exists before writing to a file, preventing errors when the log folder is deleted during runtime
+        增加 Logger 和 LoggerGroup 写入文件前对文件夹是否存在进行检查, 保证运行时日志文件夹被删除时不会发生报错 
+* Added an exclusion setting in LoggerGroup to prevent listening to certain loggers
+        增加 LoggerGroup 排除对某些日志器监听的设置 
+* Added the remove_listen_logging method to Logger
+        新增 Logger 的 remove_listen_logging 方法 
+* Added the \_\_repr__ method to Logger
+        增加 Logger 的 \_\_repr__方法
+* Fixed incorrect line breaks when the highlighting type is set to HTML
+        修复高亮类型为 HTML 时, 换行符不对的 bug 
+* Fixed list and connection errors when adding or removing logger listeners in LoggerGroup
+        修复 LoggerGroup 增加日志器监听和移除监听时, 列表和连接的错误
+* Fixed a logic bug in LoggerGroup's remove_log method
+        修复 LoggerGroup 的 remove_log 逻辑 bug
+* Fixed an issue where Logger was not removed from the logger list upon destruction
+        修改 Logger 销毁时没有移除Logger列表中的自身元素 
+* Removed the singleton mode of listeners in Logger
+        取消 Logger 中监听器的单例模式
+* Refactored Logger and LoggerGroup parameters to follow the Qt-style approach. Some initialization parameters are retained, while others must be explicitly set via method calls
+        对 Logger 和 LoggerGroup 参数传入参考qt风格进行重构, 保留部分初始化参数, 其余参数需显示调用方法进行设置
+* Separated Logger's logging listener. If logging needs to be listened to, the method must be explicitly called to enable it
+        分离 Logger 对 logging 的监听, 如需监听则需显示调用方法进行设置
+
 #### v0.0.1.4
 
 * The new logger supports the exclusion of combined function names (such as `ClassA.func1`). Currently, only first-level combinations are supported, that is, the most recent class to which the method belongs must be consistent with the current class at the time of call.
         新增日志器支持对组合函数名(如 `ClassA.func1`)的排除. 目前仅支持一级组合, 即方法所属的最近一级类必须与调用时的当前类一致. 
 * Fixed the issue that StaticEnum could add new properties outside, as well as the bug in data type errors in multi-layer nested classes inside.
         修复 StaticEnum 可在外部新增属性的问题, 以及内部多层嵌套类的数据类型错误的 bug. 
-* Changed the way data types are converted in the StaticEnum metaclass, changed from the previous eval to created with the class.
+* Modified the way data types are converted in the StaticEnum metaclass, changed from the previous eval to created with the class.
         更改了 StaticEnum 元类中转换数据类型的方式, 从之前的eval更改为用类创建. 
 

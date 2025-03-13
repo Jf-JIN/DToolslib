@@ -175,6 +175,19 @@ Interior Decorators
 
 # 版本信息 Version Info
 
+#### v0.0.1.6
+
+* Fixed the bug where the Logger would crash when writing to a file if the folder/file did not exist.
+        修复Logger写入文件时，文件夹/文件不存在时崩溃的Bug
+* Fixed the bug where the Logger would crash when sys.stdout was optimized to None.
+        修复Logger中sys.stdout被优化时为None而导致崩溃的bug
+* Fixed the bug where LoggerGroup would automatically create a folder during initialization even if no file output was specified.
+        修复LoggerGroup中初始化时即使不输出文件但仍会自动建立文件夹的bug
+* Added name and folder_path attributes to the Logger.
+        增加Logger的name和folder_path属性
+* Try to fix the issue where the Logger did not automatically remove its own data from class attributes when it is destroyed.
+        尝试修复Logger被删除时未能自动删除类属性中的自身数据
+
 #### v0.0.1.5
 
 * Fixed the error message of EventSignal signal class

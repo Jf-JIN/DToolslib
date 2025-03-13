@@ -511,6 +511,14 @@ class Logger(object):
     __logger_name_list__ = []
     __logger_folder_name_list__ = []
 
+    @property
+    def folder_path(self):
+        return self.__log_folder_path
+
+    @property
+    def name(self):
+        return self.__log_name
+
     def __new__(cls, log_name, *args, **kwargs):
         instance = super().__new__(cls)
         if log_name in cls.__logger_name_list__:
@@ -546,8 +554,10 @@ class Logger(object):
                 asni_ct(
                     f'- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}', _ColorMap.YELLOW.ANSI_TXT)
             )
-            sys.stdout.write(warning_text)
+            if sys.stdout:
+                sys.stdout.write(warning_text)
         self.__log_sub_folder_name = log_sub_folder_name if isinstance(log_sub_folder_name, str) and log_sub_folder_name else self.__log_name
+        self.__log_folder_path = os.path.join(self.__log_path, self.__log_sub_folder_name)
         if self.__log_sub_folder_name in self.__class__.__logger_folder_name_list__:
             raise ValueError(f'<WARNING> Log sub-folder name "{self.__log_sub_folder_name}" is already in use.')
         self.__class__.__logger_folder_name_list__.append(self.__log_sub_folder_name)
@@ -560,22 +570,21 @@ class Logger(object):
         self.__clear_files()
 
     def __del__(self):
-        if hasattr(Logger, '__logger_folder_name_list__'):
+        try:
+            Logger.__instance_list__.remove(self)
+        except:
+            pass
+
+        if hasattr(Logger, f'_{self.__class__.__name__}__log_sub_folder_name'):
             try:
                 Logger.__logger_folder_name_list__.remove(self.__log_sub_folder_name)
-            except ValueError:
+            except:
                 pass
 
-        if hasattr(Logger, '__instance_list__'):
-            try:
-                Logger.__instance_list__.remove(self)
-            except ValueError:
-                pass
-
-        if hasattr(Logger, '__logger_name_list__'):
+        if hasattr(Logger, f'_{self.__class__.__name__}__log_name'):
             try:
                 Logger.__logger_name_list__.remove(self.__log_name)
-            except ValueError:
+            except:
                 pass
 
     def __repr__(self):
@@ -656,11 +665,11 @@ class Logger(object):
             self.__current_log_folder_path = os.path.join(self.__log_path, self.__log_sub_folder_name)
             if not os.path.exists(self.__current_log_folder_path):
                 os.makedirs(self.__current_log_folder_path)
-            self.__log_file_path = os.path.join(self.__log_path, self.__log_sub_folder_name, f'{self.__log_name}-[{self.__start_time_format}]--0.log')
+            self.__log_file_path = os.path.join(self.__log_folder_path, f'{self.__log_name}-[{self.__start_time_format}]--0.log')
         else:
             file_name = os.path.splitext(os.path.basename(self.__log_file_path))[0]
             str_list = file_name.split('--')
-            self.__log_file_path = os.path.join(self.__log_path, self.__log_sub_folder_name, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
+            self.__log_file_path = os.path.join(self.__log_folder_path, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
 
     def __call__(self, *args, **kwargs) -> None:
         call_dict = {
@@ -807,7 +816,8 @@ class Logger(object):
         """ 打印日志信息 """
         if not self.__enableConsoleOutput:
             return
-        sys.stdout.write(message)
+        if sys.stdout:
+            sys.stdout.write(message)
 
     def __write(self, message: str) -> None:
         """ 写入日志信息 """
@@ -835,10 +845,12 @@ class Logger(object):
 # <file time> This log file is created at\t {file_time}.
 {'#'*66}\n\n{message}"""
             self.__current_size = len(message.encode('utf-8'))
+        if not os.path.exists(self.__log_folder_path):
+            os.makedirs(self.__log_folder_path)
         # 清理旧日志文件
         self.__clear_files()
         # 写入新日志文件
-        with open(self.__log_file_path, 'a', encoding='utf-8') as f:
+        with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
             f.write(message)
 
     def __output(self, level, *args, **kwargs) -> tuple:
@@ -1308,8 +1320,9 @@ class LoggerGroup(object):
         elif log_folder_path:
             raise FileNotFoundError(f'Log folder path "{log_folder_path}" does not exist, create it.')
         else:
-            sys.stdout.write(
-                f'\x1B[93m < WARNING > No File Output from \x1B[93;100m<LoggerGroup>\x1B[0m\n   \x1B[33m- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}\x1B[0m\n')
+            if sys.stdout:
+                sys.stdout.write(
+                    f'\x1B[93m < WARNING > No File Output from \x1B[93;100m<LoggerGroup>\x1B[0m\n   \x1B[33m- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}\x1B[0m\n')
         self.__isNewFile = True
         self.__limit_single_file_size_Bytes: int = limit_single_file_size_kB * 1000 if isinstance(limit_single_file_size_kB, int) else -1
         self.__limit_files_count = limit_files_count if isinstance(limit_files_count, int) else -1
@@ -1394,7 +1407,7 @@ class LoggerGroup(object):
         """ 设置日志文件路径 """
         # 支持的字符 {}[];'',.!~@#$%^&()_+-=
 
-        if self.__isExistsPath is False:
+        if not self.__enableFileOutput or self.__isExistsPath is False:
             return
         if not hasattr(self, f'_{self.__class__.__name__}__log_sub_folder_path'):  # 初始化, 创建属性
             self.__start_time_format = self.__start_time.strftime("%Y%m%d_%H'%M'%S")
@@ -1466,7 +1479,8 @@ class LoggerGroup(object):
         if not os.path.exists(self.__log_sub_folder_path):
             os.makedirs(self.__log_sub_folder_path)
         self.__clear_files()
-        with open(self.__log_file_path, 'a', encoding='utf-8') as f:
+
+        with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
             f.write(message)
 
     def __connect_single(self, log_obj: Logger) -> None:

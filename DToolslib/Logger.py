@@ -7,6 +7,7 @@ import re
 import traceback
 import logging
 from datetime import datetime
+import typing
 
 _LOG_FOLDER_NAME = 'Logs'
 _LOG_GROUP_FOLDER_NAME = '#Global_Log'
@@ -94,14 +95,14 @@ class LogHighlightType(_EnumBase):
     NONE = None
 
 
-def _normalize_log_level(log_level: str | int | LogLevel) -> LogLevel:
+def _normalize_log_level(log_level: typing.Union[str, int, LogLevel]) -> LogLevel:
     normalized_log_level = 0
     if isinstance(log_level, str):
         if log_level.upper() in LogLevel:
             normalized_log_level = getattr(LogLevel, log_level.upper())
         else:
             raise ValueError(f'<ERROR> Log level "{log_level}" is not a valid log level.')
-    elif isinstance(log_level, int | float):
+    elif isinstance(log_level, (int, float)):
         normalized_log_level = abs(log_level // 10 * 10)
     else:
         raise ValueError(f'<ERROR> Log level "{log_level}" is not a valid log level. It should be a string or a number.')
@@ -110,8 +111,8 @@ def _normalize_log_level(log_level: str | int | LogLevel) -> LogLevel:
 
 def asni_ct(
     text: str,
-    txt_color: str | None = None,
-    bg_color: str | None = None,
+    txt_color: typing.Union[str, None] = None,
+    bg_color: typing.Union[str, None] = None,
     dim: bool = False,
     bold: bool = False,
     italic: bool = False,
@@ -149,8 +150,8 @@ def asni_ct(
 
 def html_ct(
     text: str,
-    txt_color: str | None = None,
-    bg_color: str | None = None,
+    txt_color: typing.Union[str, None] = None,
+    bg_color: typing.Union[str, None] = None,
     dim: bool = False,
     bold: bool = False,
     italic: bool = False,
@@ -532,8 +533,8 @@ class Logger(object):
         log_name: str,
         log_folder_path: str = '',
         log_sub_folder_name: str = '',
-        log_level: str | int = LogLevel.INFO,
-        default_level: str | int = LogLevel.INFO,
+        log_level: typing.Union[str, int] = LogLevel.INFO,
+        default_level: typing.Union[str, int] = LogLevel.INFO,
         enableConsoleOutput: bool = True,
         enableFileOutput: bool = True,
         ** kwargs,
@@ -1128,7 +1129,7 @@ class Logger(object):
         """
         self.__enableFileOutput = enable_flag
 
-    def set_file_size_limit_kB(self, size_limit: int | float) -> None:
+    def set_file_size_limit_kB(self, size_limit: typing.Union[int, float]) -> None:
         """ 
         设置单个日志文件大小限制
 
@@ -1137,7 +1138,7 @@ class Logger(object):
         """
         if not isinstance(size_limit, (int, float)):
             raise TypeError("size_limit must be int")
-        self.__limit_single_file_size_Bytes: int | float = size_limit * 1000
+        self.__limit_single_file_size_Bytes: typing.Union[int, float] = size_limit * 1000
 
     def set_file_count_limit(self, count_limit: int) -> None:
         """ 
@@ -1351,8 +1352,8 @@ class LoggerGroup(object):
         else:
             self.__connect_all()
 
-    def append_log(self, log_obj: Logger | list) -> None:
-        if isinstance(log_obj, list | tuple):
+    def append_log(self, log_obj: typing.Union[Logger, list]) -> None:
+        if isinstance(log_obj, (list, tuple)):
             self.__log_group += list(log_obj)
             for log in list(log_obj):
                 self.__connect_single(log)

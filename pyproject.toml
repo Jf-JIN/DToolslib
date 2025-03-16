@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "DToolslib"
-version = "0.0.1.6"
+version = "0.0.1.7"
 description = "A simple and complex tool library containing multiple tool scripts 一个简单且杂的工具库, 包含多个工具脚本"
 authors = [{ name = "Jf-JIN" }]
 readme = "README.md"
 license = { file = "LICENSE" } 
-requires-python = ">=3.11"
+requires-python = ">=3.8"
 keywords = ["signal", "logger", "logging", "enum"]
 
 # PyPI 分类器 (至少一个，完整列表见 https://pypi.org/classifiers/)

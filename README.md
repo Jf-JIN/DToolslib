@@ -175,6 +175,11 @@ Interior Decorators
 
 # 版本信息 Version Info
 
+#### v0.0.1.7
+
+* Added support for Python 3.8
+        增加对Python 3.8的支持
+
 #### v0.0.1.6
 
 * Fixed the bug where the Logger would crash when writing to a file if the folder/file did not exist.

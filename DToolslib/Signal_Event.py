@@ -1,4 +1,5 @@
-from typing import Callable
+
+import typing
 
 
 class _BoundSignal:
@@ -15,7 +16,7 @@ class _BoundSignal:
         self.__isClassSignal: bool = isClassSignal
         self.__slots = []
 
-    def connect(self, slot: 'EventSignal' | Callable) -> None:
+    def connect(self, slot: typing.Union['EventSignal', typing.Callable]) -> None:
         if callable(slot):
             if slot not in self.__slots:
                 self.__slots.append(slot)
@@ -24,7 +25,7 @@ class _BoundSignal:
         else:
             raise ValueError('Slot must be callable')
 
-    def disconnect(self, slot: 'EventSignal' | Callable) -> None:
+    def disconnect(self, slot: typing.Union['EventSignal', typing.Callable]) -> None:
         if slot in self.__slots:
             self.__slots.remove(slot)
 
@@ -78,7 +79,7 @@ class EventSignal:
         emit: 发射信号, Emit signal.
     """
 
-    def __init__(self, *types: type | tuple, signal_scope: str = 'instance') -> None:
+    def __init__(self, *types: typing.Union[type, tuple], signal_scope: str = 'instance') -> None:
         self.__types = types
         self.__scope = signal_scope
 
@@ -135,9 +136,9 @@ if __name__ == '__main__':
     a.signal_instance_a.disconnect(b.signal_instance_a)
 
     # output: This is a test message
-    print(f'\x1B[32mIs a.signal_class b.signal_class?\x1B[0m:\t{a.signal_class is b.signal_class}\n')  # output: True
-    print(f'\x1B[32mIs a.signal_instance_a b.signal_instance_a?\x1B[0m:\t{a.signal_instance_a is b.signal_instance_a}\n')  # output: False
-    print(f'\x1B[32mType of a.signal_class\x1B[0m:\t{type(a.signal_class)}\n')  # output: <class '__main__.EventSignal'>
-    print(f'\x1B[32mAll instance signals of a\x1B[0m:\t{a.__signals__}\n')  # output: {...} a dict with 2 keys, the values are signal instances. You can also see the slots of the signal.
-    print(f'\x1B[32mAll class signals of a\x1B[0m:\t{a.__class_signals__}\n')  # output: {...} a dict with 1 keys, the values are signal instances. You can also see the slots of the signal.
+    print(a.signal_class is b.signal_class)  # output: True
+    print(a.signal_instance_a is b.signal_instance_a)  # output: False
+    print(type(a.signal_class))  # output: <class '__main__.EventSignal'>
+    print(a.__signals__)  # output: {...} a dict with 2 keys, the values are signal instances. You can also see the slots of the signal.
+    print(a.__class_signals__)  # output: {...} a dict with 1 keys, the values are signal instances. You can also see the slots of the signal.
 """

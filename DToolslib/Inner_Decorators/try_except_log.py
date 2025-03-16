@@ -4,7 +4,7 @@ import traceback
 import wrapt
 
 
-def try_except_log(logger_error=None, *func) -> Callable[..., Any | None]:
+def try_except_log(logger_error=None, *func) -> Callable[..., Any]:
     """
     用于捕获函数的异常并返回异常对象. 
 
@@ -17,7 +17,7 @@ def try_except_log(logger_error=None, *func) -> Callable[..., Any | None]:
     """
 
     @wrapt.decorator
-    def try_decorator(wrapped: Callable, instance, args, kwargs) -> Callable[..., Any | None]:
+    def try_decorator(wrapped: Callable, instance, args, kwargs) -> Callable[..., Any]:
         try:
             return wrapped(*args, **kwargs)
         except Exception as e:

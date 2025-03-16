@@ -200,7 +200,6 @@ class _StaticEnumMeta(type):
         super().__setattr__(key, value)
 
     def __iter__(cls):
-
         return iter(cls.__members__['data'].values())
 
     def __contains__(self, item) -> bool:
@@ -247,6 +246,13 @@ class StaticEnum(metaclass=_StaticEnumMeta):
 
     def values(self):
         return self.__members__['data'].values()
+
+    @classmethod
+    def getItem(cls, item):
+        for key, value in cls.__members__['data'].items():
+            if value == item:
+                return value
+        raise AttributeError(f'Item {item} not found in {self.__class__.__name__}')
 
 
 """ 

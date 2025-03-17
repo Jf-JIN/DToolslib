@@ -1,6 +1,6 @@
 # DToolslib
 
-A simple and complex tool library containing multiple tool scripts
+A simple and miscellaneous utility library containing multiple utility scripts.
 一个简单且杂的工具库, 包含多个工具脚本
 
 ### StaticEnum

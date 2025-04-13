@@ -6,11 +6,26 @@ import inspect
 import re
 import traceback
 import logging
+import threading
 from datetime import datetime
 import typing
 
-_LOG_FOLDER_NAME = 'Logs'
-_LOG_GROUP_FOLDER_NAME = '#Global_Log'
+try:
+    from PyQt5.QtCore import QThread
+except:
+    QThread = None
+
+if QThread is None:
+    try:
+        from PyQt6.QtCore import QThread
+    except:
+        QThread = None
+
+if QThread is None:
+    try:
+        from PySide6.QtCore import QThread
+    except:
+        QThread = None
 
 
 class _EnumBaseMeta(type):
@@ -56,6 +71,19 @@ class _ColorMapItem(object):
         super().__setattr__(name, value)
 
 
+class _Log_Default(_EnumBase):
+    GROUP_FOLDER_NAME = '#Global_Log'
+    HISTORY_FOLDER_NAME = '#History_Log'
+    LIST_RESERVE_NAME = [GROUP_FOLDER_NAME, HISTORY_FOLDER_NAME]
+    ROOT_FOLDER_NAME = 'Logs'
+
+    # MESSAGE_FORMAT =  '%(consoleLine)s\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\n%(message)s\n'
+
+    # MESSAGE_FORMAT = '%(consoleLine)s\n[%(asctime)s] [log: %(logName)s] [thread: %(threadName)s] [%(moduleName)s::%(className)s.%(functionName)s] [line: %(lineNum)s] - %(levelName)s\n%(message)s\n'
+
+    MESSAGE_FORMAT = '%(consoleLine)s\n[%(asctime)s] [%(logName)s] [%(threadName)s | %(moduleName)s::%(className)s.%(functionName)s] - %(levelName)s\n%(message)s\n'
+
+
 class _ColorMap(_EnumBase):
     """ 颜色枚举类 """
     BLACK = _ColorMapItem('BLACK', '30', '40', '#010101')
@@ -75,6 +103,86 @@ class _ColorMap(_EnumBase):
     LIGHTCYAN = _ColorMapItem('LIGHTCYAN', '96', '106', '#00FFFF')
     LIGHTWHITE = _ColorMapItem('LIGHTWHITE', '97', '107', '#FFFFFF')
 
+    @staticmethod
+    def asni_ct(
+        text: str,
+        txt_color: typing.Union[str, None] = None,
+        bg_color: typing.Union[str, None] = None,
+        dim: bool = False,
+        bold: bool = False,
+        italic: bool = False,
+        underline: bool = False,
+        blink: bool = False,
+        *args, **kwargs
+    ) -> str:
+        """
+        ANSI转义序列生成器
+
+        参数:
+        - text: 需要转义的文本
+        - txt_color: 文本颜色
+        - bg_color: 背景颜色
+        - dim: 是否为暗色
+        - bold: 是否为粗体
+        - italic: 是否为斜体
+        - underline: 是否为下划线
+        - blink: 是否为闪烁
+
+        返回:
+        - 转义后的文本
+        """
+        style_list = []
+        style_list.append('1') if bold else ''  # 粗体
+        style_list.append('2') if dim else ''  # 暗色
+        style_list.append('3') if italic else ''  # 斜体
+        style_list.append('4') if underline else ''  # 下划线
+        style_list.append('5') if blink else ''  # 闪烁
+        style_list.append(getattr(getattr(_ColorMap, txt_color), 'ANSI_TXT')) if txt_color in _ColorMap else ''  # 字体颜色
+        style_list.append(getattr(getattr(_ColorMap, bg_color), 'ANSI_BG')) if bg_color in _ColorMap else ''  # 背景颜色
+        style_str = ';'.join(item for item in style_list if item)
+        return f'\x1B[{style_str}m{text}\x1B[0m'
+
+    @staticmethod
+    def html_ct(
+        text: str,
+        txt_color: typing.Union[str, None] = None,
+        bg_color: typing.Union[str, None] = None,
+        dim: bool = False,
+        bold: bool = False,
+        italic: bool = False,
+        underline: bool = False,
+        blink: bool = False,
+        *args, **kwargs
+    ) -> str:
+        """
+        HTML转义序列生成器
+
+        参数:
+        - text: 需要转义的文本
+        - txt_color: 文本颜色
+        - bg_color: 背景颜色
+        - dim: 是否为暗色
+        - bold: 是否为粗体
+        - italic: 是否为斜体
+        - underline: 是否为下划线
+        - blink: 是否为闪烁
+
+        返回:
+        - 转义后的文本
+        """
+        style_list = []
+        style_list.append('color: '+getattr(getattr(_ColorMap, txt_color), 'HEX')) if txt_color in _ColorMap else ''
+        style_list.append('background-color: '+getattr(getattr(_ColorMap, bg_color), 'HEX')) if bg_color in _ColorMap else ''
+        style_list.append('font-weight: bold') if bold else ''
+        style_list.append('font-style: italic') if italic else ''
+        style_list.append('text-decoration: underline') if underline else ''
+        style_list.append('opacity: 0.7;animation: blink 1s step-end infinite') if blink else ''
+        style_str = ';'.join(item for item in style_list if item)+';'
+        output_text = (f'<span style="{style_str}">{text}</span>').replace('\n', '<br>')
+        pre_blick_text = '<style > @keyframes blink{50% {opacity: 50;}}</style>'
+        output_text = pre_blick_text + output_text if blink else output_text
+        return output_text
+
 
 class LogLevel(_EnumBase):
     """ 日志级别枚举类 """
@@ -87,106 +195,26 @@ class LogLevel(_EnumBase):
     CRITICAL = 60
     NOOUT = 70
 
+    @staticmethod
+    def _normalize_log_level(log_level: typing.Union[str, int, 'LogLevel']) -> 'LogLevel':
+        normalized_log_level = 0
+        if isinstance(log_level, str):
+            if log_level.upper() in LogLevel:
+                normalized_log_level = getattr(LogLevel, log_level.upper())
+            else:
+                raise ValueError(f'<ERROR> Log level "{log_level}" is not a valid log level.')
+        elif isinstance(log_level, (int, float)):
+            normalized_log_level = abs(log_level // 10 * 10)
+        else:
+            raise ValueError(f'<ERROR> Log level "{log_level}" is not a valid log level. It should be a string or a number.')
+        return normalized_log_level
+
 
 class LogHighlightType(_EnumBase):
     """ 高亮类型枚举类 """
     ASNI = 'ASNI'
     HTML = 'HTML'
     NONE = None
-
-
-def _normalize_log_level(log_level: typing.Union[str, int, LogLevel]) -> LogLevel:
-    normalized_log_level = 0
-    if isinstance(log_level, str):
-        if log_level.upper() in LogLevel:
-            normalized_log_level = getattr(LogLevel, log_level.upper())
-        else:
-            raise ValueError(f'<ERROR> Log level "{log_level}" is not a valid log level.')
-    elif isinstance(log_level, (int, float)):
-        normalized_log_level = abs(log_level // 10 * 10)
-    else:
-        raise ValueError(f'<ERROR> Log level "{log_level}" is not a valid log level. It should be a string or a number.')
-    return normalized_log_level
-
-
-def asni_ct(
-    text: str,
-    txt_color: typing.Union[str, None] = None,
-    bg_color: typing.Union[str, None] = None,
-    dim: bool = False,
-    bold: bool = False,
-    italic: bool = False,
-    underline: bool = False,
-    blink: bool = False,
-    *args, **kwargs
-) -> str:
-    """
-    ANSI转义序列生成器
-
-    参数:
-    - text: 需要转义的文本
-    - txt_color: 文本颜色
-    - bg_color: 背景颜色
-    - dim: 是否为暗色
-    - bold: 是否为粗体
-    - italic: 是否为斜体
-    - underline: 是否为下划线
-    - blink: 是否为闪烁
-
-    返回:
-    - 转义后的文本
-    """
-    style_list = []
-    style_list.append('1') if bold else ''  # 粗体
-    style_list.append('2') if dim else ''  # 暗色
-    style_list.append('3') if italic else ''  # 斜体
-    style_list.append('4') if underline else ''  # 下划线
-    style_list.append('5') if blink else ''  # 闪烁
-    style_list.append(getattr(getattr(_ColorMap, txt_color), 'ANSI_TXT')) if txt_color in _ColorMap else ''  # 字体颜色
-    style_list.append(getattr(getattr(_ColorMap, bg_color), 'ANSI_BG')) if bg_color in _ColorMap else ''  # 背景颜色
-    style_str = ';'.join(item for item in style_list if item)
-    return f'\x1B[{style_str}m{text}\x1B[0m'
-
-
-def html_ct(
-    text: str,
-    txt_color: typing.Union[str, None] = None,
-    bg_color: typing.Union[str, None] = None,
-    dim: bool = False,
-    bold: bool = False,
-    italic: bool = False,
-    underline: bool = False,
-    blink: bool = False,
-    *args, **kwargs
-) -> str:
-    """
-    HTML转义序列生成器
-
-    参数:
-    - text: 需要转义的文本
-    - txt_color: 文本颜色
-    - bg_color: 背景颜色
-    - dim: 是否为暗色
-    - bold: 是否为粗体
-    - italic: 是否为斜体
-    - underline: 是否为下划线
-    - blink: 是否为闪烁
-
-    返回:
-    - 转义后的文本
-    """
-    style_list = []
-    style_list.append('color: '+getattr(getattr(_ColorMap, txt_color), 'HEX')) if txt_color in _ColorMap else ''
-    style_list.append('background-color: '+getattr(getattr(_ColorMap, bg_color), 'HEX')) if bg_color in _ColorMap else ''
-    style_list.append('font-weight: bold') if bold else ''
-    style_list.append('font-style: italic') if italic else ''
-    style_list.append('text-decoration: underline') if underline else ''
-    style_list.append('opacity: 0.7;animation: blink 1s step-end infinite') if blink else ''
-    style_str = ';'.join(item for item in style_list if item)+';'
-    output_text = (f'<span style="{style_str}">{text}</span>').replace('\n', '<br>')
-    pre_blick_text = '<style > @keyframes blink{50% {opacity: 50;}}</style>'
-    output_text = pre_blick_text + output_text if blink else output_text
-    return output_text
 
 
 class _BoundSignal:
@@ -362,7 +390,7 @@ class _LogMessageItem(object):
     def set_text(self, text) -> None:
         self.__text = text
         self.__text_color = self.__colorize_text(self.__text, self.__color_font, self.__color_background, self.__dim, self.__bold, self.__italic, self.__underline, self.__blink)
-        self.__text_console = asni_ct(text, self.__color_font, self.__color_background, self.__dim, self.__bold, self.__italic, self.__underline, self.__blink)
+        self.__text_console = _ColorMap.asni_ct(text, self.__color_font, self.__color_background, self.__dim, self.__bold, self.__italic, self.__underline, self.__blink)
 
     def __colorize_text(self, text: str, *args, highlight_type=None, **kwargs) -> str:
         if highlight_type is None:
@@ -370,13 +398,17 @@ class _LogMessageItem(object):
             if highlight_type is None:
                 return text
         if highlight_type == LogHighlightType.ASNI:
-            return asni_ct(text, *args, **kwargs)
+            return _ColorMap.asni_ct(text, *args, **kwargs)
         elif highlight_type == LogHighlightType.HTML:
-            return html_ct(text, *args, **kwargs)
+            return _ColorMap.html_ct(text, *args, **kwargs)
         return text
 
     def set_highlight_type(self, highlight_type: LogHighlightType) -> None:
         self.__highlight_type: LogHighlightType = highlight_type
+
+
+SELF_LOGGER = typing.TypeVar('SELF_LOGGER', bound='Logger')
+SELF_LOGGERGROUP = typing.TypeVar('SELF_LOGGERGROUP', bound='LoggerGroup')
 
 
 class Logger(object):
@@ -385,10 +417,10 @@ class Logger(object):
 
     参数:
     - log_name(str): 日志名称
-    - log_path(str): 日志路径, 默认为无路径
-    - log_sub_folder_name(str): 日志子文件夹名称, 默认'', 此时将以日志名称作为子文件夹名称
+    - root_dir(str): 日志路径, 默认为无路径
+    - root_folder_name(str): 日志根文件夹名称, 默认为 'Logs',
+    - log_folder_name(str): 日志子文件夹名称, 默认'', 此时将以日志名称作为子文件夹名称
     - log_level(str): 日志级别, 默认为 `LogLevel.INFO`
-    - default_level(str): 默认日志级别, 是直接调用类时执行的日志级别, 默认为`INFO`
     - enableConsoleOutput(bool): 是否启用控制台输出, 默认为 `True`
     - enableFileOutput(bool): 是否启用文件输出, 默认为 `True`
     - **kwargs, 消息格式中的自定义参数, 使用方法见示例
@@ -432,7 +464,6 @@ class Logger(object):
     - remove_exclude_func(func_name): 移除要排除的函数
     - remove_exclude_class(cls_name): 移除要排除的类
     - remove_exclude_module(module_name): 移除要排除的模块
-    - set_default_level(default_level): 设置默认日志级别, 用于 直接调用类时的日志输出级别
     - set_level(log_level): 设置日志级别
     - setEnableDailySplit(enable_flag): 设置是否按天分割日志文件
     - setEnableConsoleOutput(enable_flag): 设置是否输出到控制台
@@ -446,7 +477,7 @@ class Logger(object):
     示例:
     1. 通常调用:
 
-        logger = Logger(log_name='test', log_path='D:/test')
+        logger = Logger(log_name='test', root_dir='D:/test')
 
         logger.debug('debug message')
 
@@ -458,6 +489,7 @@ class Logger(object):
 
     - 提供的默认格式参数有:
         - `asctime` 当前时间
+        - `threadName` 线程名称
         - `moduleName` 模块名称
         - `functionName` 函数/方法名称
         - `className` 类名称
@@ -470,7 +502,7 @@ class Logger(object):
 
     - 如需添加自定义的参数, 可以在初始化中添加, 并可以在后续对相应的属性进行赋值
 
-    logger = Logger(log_name='test', log_folder_path='D:/test', happyNewYear=False)
+    logger = Logger(log_name='test', root_dir='D:/test', happyNewYear=False)
 
     logger.set_message_format('%(asctime)s-%(levelName)s -%(message)s -%(happyNewYear)s')
 
@@ -510,11 +542,11 @@ class Logger(object):
     signal_critical_message = _LogSignal(str)
     __instance_list__ = []
     __logger_name_list__ = []
-    __logger_folder_name_list__ = []
+    __log_folder_name_list__ = []
 
     @property
-    def folder_path(self):
-        return self.__log_folder_path
+    def log_dir(self):
+        return self.__log_dir
 
     @property
     def name(self):
@@ -531,42 +563,45 @@ class Logger(object):
     def __init__(
         self,
         log_name: str,
-        log_folder_path: str = '',
-        log_sub_folder_name: str = '',
+        root_dir: str = '',
+        root_folder_name: str = '',
+        log_folder_name: str = '',
         log_level: typing.Union[str, int] = LogLevel.INFO,
-        default_level: typing.Union[str, int] = LogLevel.INFO,
         enableConsoleOutput: bool = True,
         enableFileOutput: bool = True,
         ** kwargs,
     ) -> None:
         self.__log_name = log_name
-        if not isinstance(log_folder_path, str):
-            raise ValueError(f'<WARNING> Log folder path "{log_folder_path}" is not a string.')
-        self.__log_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME) if log_folder_path else ''
+        self.__root_folder_name = root_folder_name if root_folder_name else _Log_Default.ROOT_FOLDER_NAME
+        if not isinstance(root_dir, str):
+            raise ValueError(f'<WARNING> Log root dir "{root_dir}" is not a string.')
+        self.__root_dir: str = root_dir
+        self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
         self.__isExistsPath = False
-        if log_folder_path and os.path.exists(log_folder_path):
+        if self.__root_dir and os.path.exists(self.__root_dir):
             self.__isExistsPath = True
-        elif log_folder_path:
-            raise FileNotFoundError(f'Log folder path "{log_folder_path}" does not exist, create it.')
+        elif self.__root_dir:
+            raise FileNotFoundError(f'Log root dir "{self.__root_dir}" does not exist, create it.')
         else:
             warning_text = (
-                asni_ct('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
-                asni_ct(self.__log_name+'\n   ', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
-                asni_ct(
-                    f'- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}', _ColorMap.YELLOW.ANSI_TXT)
+                _ColorMap.asni_ct('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
+                _ColorMap.asni_ct(self.__log_name+'\n   ', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
+                _ColorMap.asni_ct(
+                    f'- No log file will be recorded because the log root path is not specified. The current root path input is "{self.__root_path}". Type: {type(self.__root_path)}', txt_color=_ColorMap.YELLOW.ANSI_TXT)
             )
             if sys.stdout:
                 sys.stdout.write(warning_text)
-        self.__log_sub_folder_name = log_sub_folder_name if isinstance(log_sub_folder_name, str) and log_sub_folder_name else self.__log_name
-        self.__log_folder_path = os.path.join(self.__log_path, self.__log_sub_folder_name)
-        if self.__log_sub_folder_name in self.__class__.__logger_folder_name_list__:
-            raise ValueError(f'<WARNING> Log sub-folder name "{self.__log_sub_folder_name}" is already in use.')
-        self.__class__.__logger_folder_name_list__.append(self.__log_sub_folder_name)
-        self.__log_level: LogLevel = _normalize_log_level(log_level)
-        self.__default_level: LogLevel = _normalize_log_level(default_level)
+        self.__log_folder_name = log_folder_name if isinstance(log_folder_name, str) and log_folder_name else self.__log_name
+        self.__log_dir = os.path.join(self.__root_path, self.__log_folder_name)
+        if self.__log_folder_name in self.__class__.__log_folder_name_list__:
+            raise ValueError(f'<WARNING> Log folder name "{self.__log_folder_name}" is already in use.')
+        self.__class__.__log_folder_name_list__.append(self.__log_folder_name)
+        self.__log_level: LogLevel = LogLevel._normalize_log_level(log_level)
         self.__enableConsoleOutput: bool = enableConsoleOutput if isinstance(enableConsoleOutput, bool) else True
         self.__enableFileOutput: bool = enableFileOutput if isinstance(enableFileOutput, bool) else True
+        self.__enableQThreadtracking: bool = False
         self.__kwargs: dict = kwargs
+        self.__thread_lock = threading.Lock()
         self.__init_params()
         self.__clear_files()
 
@@ -576,9 +611,9 @@ class Logger(object):
         except:
             pass
 
-        if hasattr(Logger, f'_{self.__class__.__name__}__log_sub_folder_name'):
+        if hasattr(Logger, f'_{self.__class__.__name__}__log_folder_name'):
             try:
-                Logger.__logger_folder_name_list__.remove(self.__log_sub_folder_name)
+                Logger.__log_folder_name_list__.remove(self.__log_folder_name)
             except:
                 pass
 
@@ -595,7 +630,7 @@ class Logger(object):
         self.__limit_single_file_size_Bytes = -1
         self.__limit_files_count = -1
         self.__limit_files_days = -1
-        self.__message_format = '%(consoleLine)s\n[%(asctime)s] [log: %(logName)s] [module: %(moduleName)s] [class: %(className)s] [function: %(functionName)s] [line: %(lineNum)s]- %(levelName)s\n%(message)s\n'
+        self.__message_format = _Log_Default.MESSAGE_FORMAT
         self.__highlight_type = LogHighlightType.NONE
         self.__dict__.update(self.__kwargs)
         self.__message_queue = queue.Queue()
@@ -607,6 +642,7 @@ class Logger(object):
         self.__var_dict: dict = {  # 日志变量字典
             'logName': _LogMessageItem('logName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
             'asctime': _LogMessageItem('asctime', font_color=_ColorMap.GREEN.name, highlight_type=self.__highlight_type, bold=True),
+            'threadName': _LogMessageItem('threadName', font_color=_ColorMap.YELLOW.name, highlight_type=self.__highlight_type),
             'moduleName': _LogMessageItem('moduleName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
             'functionName': _LogMessageItem('functionName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
             'className': _LogMessageItem('className', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
@@ -659,31 +695,17 @@ class Logger(object):
     def __set_log_file_path(self) -> None:
         """ 设置日志文件路径 """
         # 支持的字符 {}[];'',.!~@#$%^&()_+-=
-        if self.__isExistsPath is False:
+        if not self.__enableFileOutput or self.__isExistsPath is False:
             return
-        if not hasattr(self, '_Logger__log_file_path'):  # 初始化, 创建属性
+        if not hasattr(self, f'_{self.__class__.__name__}__log_file_path'):  # 初始化, 创建属性
             self.__start_time_format = self.__start_time_log.strftime("%Y%m%d_%H'%M'%S")
-            self.__current_log_folder_path = os.path.join(self.__log_path, self.__log_sub_folder_name)
-            if not os.path.exists(self.__current_log_folder_path):
-                os.makedirs(self.__current_log_folder_path)
-            self.__log_file_path = os.path.join(self.__log_folder_path, f'{self.__log_name}-[{self.__start_time_format}]--0.log')
+            if not os.path.exists(self.__log_dir):
+                os.makedirs(self.__log_dir)
+            self.__log_file_path = os.path.join(self.__log_dir, f'{self.__log_name}-[{self.__start_time_format}]--0.log')
         else:
             file_name = os.path.splitext(os.path.basename(self.__log_file_path))[0]
             str_list = file_name.split('--')
-            self.__log_file_path = os.path.join(self.__log_folder_path, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
-
-    def __call__(self, *args, **kwargs) -> None:
-        call_dict = {
-            LogLevel.DEBUG: self.debug,
-            LogLevel.INFO: self.info,
-            LogLevel.WARNING: self.warning,
-            LogLevel.ERROR: self.error,
-            LogLevel.CRITICAL: self.critical,
-        }
-        if self.__default_level in call_dict:
-            call_dict[self.__default_level](*args, **kwargs)
-        else:
-            raise TypeError("'module' object is not callable. Please use Logger.trace/debug/info/warning/error/critical to log.")
+            self.__log_file_path = os.path.join(self.__log_dir, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
 
     def __setattr__(self, name: str, value) -> None:
         if hasattr(self, '_Logger__kwargs') and name != '_Logger__kwargs' and name in self.__kwargs:
@@ -703,12 +725,12 @@ class Logger(object):
             return
         if (not isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) or (not isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
             return
-        self.__current_log_folder_path = os.path.join(self.__log_path, self.__log_sub_folder_name)
-        if not os.path.exists(self.__current_log_folder_path):
+        self.__log_dir = os.path.join(self.__root_path, self.__log_folder_name)
+        if not os.path.exists(self.__log_dir):
             return
         current_file_list = []
-        for file in os.listdir(self.__current_log_folder_path):
-            fp = os.path.join(self.__current_log_folder_path, file)
+        for file in os.listdir(self.__log_dir):
+            fp = os.path.join(self.__log_dir, file)
             if file.endswith('.log') and os.path.isfile(fp):
                 current_file_list.append(fp)
         length_file_list = len(current_file_list)
@@ -732,6 +754,10 @@ class Logger(object):
         module_name = ''
         script_name = ''
         script_path = ''
+        if self.__enableQThreadtracking and QThread is not None:
+            thread_name = QThread.currentThread().objectName() or str(QThread.currentThread())
+        else:
+            thread_name = threading.current_thread().name
         func = None
         for idx, fn in enumerate(stack):
             unprefix_variable = fn.function.lstrip('__')
@@ -755,6 +781,8 @@ class Logger(object):
                 script_path = fn.filename
                 func = fn
                 break
+        if not class_name:
+            class_name = '<module>'
         return {
             'caller': func,
             'caller_name': caller_name,
@@ -763,6 +791,7 @@ class Logger(object):
             'module_name': module_name,
             'script_name': script_name,
             'script_path': script_path,
+            'thread_name': thread_name,
         }
 
     def __format(self, log_level: int, *args) -> tuple:
@@ -779,6 +808,7 @@ class Logger(object):
         line_num = caller_info['line_num']
         self.__var_dict['logName'].set_text(self.__log_name)
         self.__var_dict['asctime'].set_text(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        self.__var_dict['threadName'].set_text(caller_info['thread_name'])
         self.__var_dict['moduleName'].set_text(caller_info['module_name'])
         self.__var_dict['scriptName'].set_text(caller_info['script_name'])
         self.__var_dict['scriptPath'].set_text(caller_info['script_path'])
@@ -846,13 +876,14 @@ class Logger(object):
 # <file time> This log file is created at\t {file_time}.
 {'#'*66}\n\n{message}"""
             self.__current_size = len(message.encode('utf-8'))
-        if not os.path.exists(self.__log_folder_path):
-            os.makedirs(self.__log_folder_path)
+        if not os.path.exists(self.__log_dir):
+            os.makedirs(self.__log_dir)
         # 清理旧日志文件
         self.__clear_files()
         # 写入新日志文件
-        with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
-            f.write(message)
+        with self.__thread_lock:
+            with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
+                f.write(message)
 
     def __output(self, level, *args, **kwargs) -> tuple:
         res = self.__format(level, *args)
@@ -961,7 +992,7 @@ class Logger(object):
         exception_str += '\n'
         self.error(exception_str, *args, **kwargs)
 
-    def set_listen_logging(self, logger_name: str = '', level: LogLevel = LogLevel.NOTSET) -> None:
+    def set_listen_logging(self, logger_name: str = '', level: LogLevel = LogLevel.NOTSET) -> SELF_LOGGER:
         """ 
         设置监听日志
 
@@ -983,12 +1014,13 @@ class Logger(object):
             self.__logging_listener_handler.set_level(self.__log_level_translation_dict[level])
         self.__logging_listener.setLevel(self.__log_level_translation_dict[level])
 
-    def remove_listen_logging(self) -> None:
+    def remove_listen_logging(self) -> SELF_LOGGER:
         """ 移除监听日志 """
         if hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler') and hasattr(self, f'_{self.__class__.__name__}__logging_listener'):
             self.__logging_listener.removeHandler(self.__logging_listener_handler)
+        return self
 
-    def set_exclude_funcs(self, funcs_list: list) -> None:
+    def set_exclude_funcs(self, funcs_list: list) -> SELF_LOGGER:
         """ 
         设置需要排除的函数 
 
@@ -1000,8 +1032,9 @@ class Logger(object):
         self.__exclude_funcs.difference_update(dir(object))
         for item in funcs_list:
             self.__exclude_funcs.add(item)
+        return self
 
-    def set_exclude_classes(self, classes_list: list) -> None:
+    def set_exclude_classes(self, classes_list: list) -> SELF_LOGGER:
         """ 
         设置需要排除的类
 
@@ -1017,8 +1050,9 @@ class Logger(object):
         }
         for item in classes_list:
             self.__exclude_classes.add(item)
+        return self
 
-    def set_exclude_modules(self, modules_list: list) -> None:
+    def set_exclude_modules(self, modules_list: list) -> SELF_LOGGER:
         """ 
         设置需要排除的模块
 
@@ -1029,8 +1063,9 @@ class Logger(object):
         # self.__exclude_modules.add(self.__self_module_name)
         for item in modules_list:
             self.__exclude_modules.add(item)
+        return self
 
-    def add_exclude_func(self, func_name: str) -> None:
+    def add_exclude_func(self, func_name: str) -> SELF_LOGGER:
         """ 
         添加需要排除的函数
 
@@ -1038,8 +1073,9 @@ class Logger(object):
         - func_name(str): 需要排除的函数名
         """
         self.__exclude_funcs.add(func_name)
+        return self
 
-    def add_exclude_class(self, cls_name: str) -> None:
+    def add_exclude_class(self, cls_name: str) -> SELF_LOGGER:
         """ 
         添加需要排除的类
 
@@ -1047,8 +1083,9 @@ class Logger(object):
         - cls_name(str): 需要排除的类名
         """
         self.__exclude_classes.add(cls_name)
+        return self
 
-    def add_exclude_module(self, module_name: str) -> None:
+    def add_exclude_module(self, module_name: str) -> SELF_LOGGER:
         """ 
         添加需要排除的模块
 
@@ -1056,8 +1093,9 @@ class Logger(object):
         - module_name(str): 需要排除的模块名
         """
         self.__exclude_modules.add(module_name)
+        return self
 
-    def remove_exclude_func(self, func_name: str) -> None:
+    def remove_exclude_func(self, func_name: str) -> SELF_LOGGER:
         """ 
         移除需要排除的函数
 
@@ -1065,8 +1103,9 @@ class Logger(object):
         - func_name(str): 需要排除的函数名
         """
         self.__exclude_funcs.discard(func_name)
+        return self
 
-    def remove_exclude_class(self, cls_name: str) -> None:
+    def remove_exclude_class(self, cls_name: str) -> SELF_LOGGER:
         """ 
         移除需要排除的类
 
@@ -1074,8 +1113,9 @@ class Logger(object):
         - cls_name(str): 需要排除的类名
         """
         self.__exclude_classes.discard(cls_name)
+        return self
 
-    def remove_exclude_module(self, module_name: str) -> None:
+    def remove_exclude_module(self, module_name: str) -> SELF_LOGGER:
         """ 
         移除需要排除的模块
 
@@ -1083,26 +1123,70 @@ class Logger(object):
         - module_name(str): 需要排除的模块名
         """
         self.__exclude_modules.discard(module_name)
+        return self
 
-    def set_default_level(self, default_level: LogLevel) -> None:
+    def set_root_dir(self, root_dir: str) -> SELF_LOGGER:
         """ 
-        设置默认日志级别
+        设置日志文件夹路径
 
         参数:
-        - default_level(LogLevel): 默认日志级别
+        - log_dir(str): 日志文件夹路径
         """
-        self.__default_level = default_level
+        self.__root_dir = root_dir
+        self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
+        self.__log_dir = os.path.join(self.__root_path, self.__log_folder_name)
+        if self.__root_dir and os.path.exists(self.__root_dir):
+            self.__isExistsPath = True
+        else:
+            self.__isExistsPath = False
+        return self
 
-    def set_level(self, log_level: LogLevel) -> None:
+    def set_root_folder_name(self, root_folder_name: str) -> SELF_LOGGER:
+        """ 
+        设置日志文件夹名称
+
+        参数:
+        - root_folder_name(str): 日志文件夹名称
+        """
+        if not root_folder_name:
+            self.__root_folder_name = _Log_Default.ROOT_FOLDER_NAME
+        else:
+            self.__root_folder_name = root_folder_name
+        self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
+        self.__log_dir = os.path.join(self.__root_path, self.__log_folder_name)
+        return self
+
+    def set_log_folder_name(self, log_folder_name: str) -> SELF_LOGGER:
+        """ 
+        设置日志子文件夹名称
+
+        参数:
+        - log_folder_name(str): 日志子文件夹名称
+        """
+        if log_folder_name in _Log_Default.LIST_RESERVE_NAME:
+            warning_text = (
+                _ColorMap.asni_ct(f'< WARNING > {log_folder_name} is a reserved name. Log folder name will set to {self.__log_name}', _ColorMap.LIGHTYELLOW.ANSI_TXT))
+            if sys.stdout:
+                sys.stdout.write(warning_text)
+            self.__log_folder_name: str = self.__log_name
+        elif not log_folder_name:
+            self.__log_folder_name: str = self.__log_name
+        else:
+            self.__log_folder_name: str = log_folder_name
+        self.__log_dir: str = os.path.join(self.__root_path, self.__log_folder_name)
+        return self
+
+    def set_level(self, log_level: LogLevel) -> SELF_LOGGER:
         """ 
         设置日志级别
 
         参数:
         - log_level(LogLevel): 日志级别
         """
-        self.__log_level = _normalize_log_level(log_level)
+        self.__log_level = LogLevel._normalize_log_level(log_level)
+        return self
 
-    def setEnableDailySplit(self, enable_flag: bool) -> None:
+    def set_enable_daily_split(self, enable_flag: bool) -> SELF_LOGGER:
         """ 
         设置是否启用按天分割日志
 
@@ -1110,8 +1194,9 @@ class Logger(object):
         - enable_flag(bool): 是否启用按天分割日志        
         """
         self.__enableDailySplit = enable_flag
+        return self
 
-    def setEnableConsoleOutput(self, enable_flag: bool) -> None:
+    def set_enable_console_output(self, enable_flag: bool) -> SELF_LOGGER:
         """ 
         设置是否启用控制台输出
 
@@ -1119,8 +1204,9 @@ class Logger(object):
         - enable_flag(bool): 是否启用控制台输出
         """
         self.__enableConsoleOutput = enable_flag
+        return self
 
-    def setEnableFileOutput(self, enable_flag: bool) -> None:
+    def set_enable_file_output(self, enable_flag: bool) -> SELF_LOGGER:
         """ 
         设置是否启用文件输出
 
@@ -1128,8 +1214,9 @@ class Logger(object):
         - enable_flag(bool): 是否启用文件输出
         """
         self.__enableFileOutput = enable_flag
+        return self
 
-    def set_file_size_limit_kB(self, size_limit: typing.Union[int, float]) -> None:
+    def set_file_size_limit_kB(self, size_limit: typing.Union[int, float]) -> SELF_LOGGER:
         """ 
         设置单个日志文件大小限制
 
@@ -1139,8 +1226,9 @@ class Logger(object):
         if not isinstance(size_limit, (int, float)):
             raise TypeError("size_limit must be int")
         self.__limit_single_file_size_Bytes: typing.Union[int, float] = size_limit * 1000
+        return self
 
-    def set_file_count_limit(self, count_limit: int) -> None:
+    def set_file_count_limit(self, count_limit: int) -> SELF_LOGGER:
         """ 
         设置文件夹中日志文件数量限制
 
@@ -1150,8 +1238,9 @@ class Logger(object):
         if not isinstance(count_limit, int):
             raise TypeError("count_limit must be int")
         self.__limit_files_count: int = count_limit
+        return self
 
-    def set_file_days_limit(self, days_limit: int) -> None:
+    def set_file_days_limit(self, days_limit: int) -> SELF_LOGGER:
         """ 
         设置文件夹中日志文件天数限制
 
@@ -1161,8 +1250,9 @@ class Logger(object):
         if not isinstance(days_limit, int):
             raise TypeError("days_limit must be int")
         self.__limit_files_days: int = days_limit
+        return self
 
-    def set_message_format(self, message_format: str) -> None:
+    def set_message_format(self, message_format: str) -> SELF_LOGGER:
         """ 
         设置日志消息格式
 
@@ -1171,6 +1261,7 @@ class Logger(object):
 
         提供的默认格式参数有:
         - `asctime` 当前时间
+        - `threadName` 线程名称
         - `moduleName` 模块名称
         - `functionName` 函数/方法名称
         - `className` 类名称
@@ -1183,7 +1274,7 @@ class Logger(object):
 
         如需添加自定义的参数, 可以需初始化中添加并赋值, 并可以在后续对相应的属性值进行修改
 
-        logger = Logger(log_name='test', log_folder_path='D:/test', happyNewYear=False)
+        logger = Logger(log_name='test', root_dir='D:/test', happyNewYear=False)
 
         logger.set_message_format('%(asctime)s-%(levelName)s -%(message)s -%(happyNewYear)s')
 
@@ -1196,9 +1287,13 @@ class Logger(object):
         """
         if not isinstance(message_format, str):
             raise TypeError("message_format must be str")
-        self.__message_format = message_format
+        if not message_format:
+            self.__message_format = _Log_Default.MESSAGE_FORMAT
+        else:
+            self.__message_format: str = message_format
+        return self
 
-    def set_highlight_type(self, highlight_type: LogHighlightType) -> None:
+    def set_highlight_type(self, highlight_type: LogHighlightType) -> SELF_LOGGER:
         """ 
         设置日志消息高亮类型
 
@@ -1209,6 +1304,17 @@ class Logger(object):
         for item in self.__var_dict.values():
             item: _LogMessageItem
             item.set_highlight_type(highlight_type)
+        return self
+
+    def set_enable_QThread_tracking(self, enable: bool) -> SELF_LOGGER:
+        """ 
+        设置是否启用 QThread 记录所在线程
+
+        参数:
+        - enable(bool): 是否启用 QThread 记录所在线程
+        """
+        self.__enableQThreadtracking = enable
+        return self
 
 
 class LoggerGroup(object):
@@ -1216,7 +1322,8 @@ class LoggerGroup(object):
     日志组类
 
     参数:
-    - log_folder_path(str): 日志组文件夹路径
+    - root_dir(str): 日志组根文件夹路径
+    - root_folder_name(str): 日志组根文件夹名称
     - limit_single_file_size_kB(int): 文件大小限制, 单位为 kB, 默认不限制. 此项无法限制单消息长度, 若单个消息长度超过设定值, 为了消息完整性, 即使大小超过限制值, 也会完整写入日志文件, 则当前文件大小将超过限制值
     - limit_files_count(int): 文件数量限制, 默认不限制
     - limit_files_days(int): 天数限制, 默认不限制
@@ -1298,7 +1405,9 @@ class LoggerGroup(object):
 
     def __init__(
         self,
-        log_folder_path: str = '',
+        root_dir: str = '',
+        root_folder_name: str = '',
+        log_folder_name: str = '',
         log_group: list = [],
         exclude_logs: list = [],
         limit_single_file_size_kB: int = -1,  # KB
@@ -1314,32 +1423,129 @@ class LoggerGroup(object):
         self.__enableFileOutput = enableFileOutput
         self.__enableDailySplit = enableDailySplit
         self.__start_time = datetime.now()
-        self.__log_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME) if log_folder_path else ''
+        self.__root_folder_name = root_folder_name if root_folder_name else _Log_Default.ROOT_FOLDER_NAME
+        if not isinstance(root_dir, str):
+            raise ValueError(f'<WARNING> LoggerGroup root dir "{root_dir}" is not a string.')
+        self.__root_dir: str = root_dir
+        self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
         self.__isExistsPath = False
-        if log_folder_path and os.path.exists(log_folder_path):
+        if root_dir and os.path.exists(root_dir):
             self.__isExistsPath = True
-        elif log_folder_path:
-            raise FileNotFoundError(f'Log folder path "{log_folder_path}" does not exist, create it.')
+        elif root_dir:
+            raise FileNotFoundError(f'LoggerGroup root dir "{root_dir}" does not exist, create it.')
         else:
+            warning_text = (
+                _ColorMap.asni_ct('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
+                _ColorMap.asni_ct('LoggerGroup\n   ', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
+                _ColorMap.asni_ct(
+                    f'- No log file will be recorded because the log root path is not specified. The current root path input is "{self.__root_path}". Type: {type(self.__root_path)}', txt_color=_ColorMap.YELLOW.ANSI_TXT)
+            )
             if sys.stdout:
-                sys.stdout.write(
-                    f'\x1B[93m < WARNING > No File Output from \x1B[93;100m<LoggerGroup>\x1B[0m\n   \x1B[33m- No log file will be recorded because the log folder path is not specified. The current file path input is "{self.__log_path}". Type: {type(self.__log_path)}\x1B[0m\n')
+                sys.stdout.write(warning_text)
         self.__isNewFile = True
         self.__limit_single_file_size_Bytes: int = limit_single_file_size_kB * 1000 if isinstance(limit_single_file_size_kB, int) else -1
         self.__limit_files_count = limit_files_count if isinstance(limit_files_count, int) else -1
         self.__limit_files_days = limit_files_days if isinstance(limit_files_days, int) else -1
-        self.__log_folder_path = os.path.join(log_folder_path, _LOG_FOLDER_NAME)
+        self.__log_dir = os.path.join(self.__root_path, _Log_Default.GROUP_FOLDER_NAME)
         self.__current_size = 0
         self.__current_day = datetime.today().date()
         self.__log_group = []
         self.__exclude_logs = exclude_logs if isinstance(exclude_logs, list) else []
         self.__initialized = False
+        self.__thread_lock = threading.Lock()
         self.__set_log_file_path()
         self.set_log_group(log_group)
         self.__clear_files()
         self.__initialized = True
 
-    def set_log_group(self, log_group: list) -> None:
+    def set_root_dir(self, root_dir: str) -> SELF_LOGGERGROUP:
+        """ 
+        设置日志文件夹路径
+
+        参数:
+        - log_dir(str): 日志文件夹路径
+        """
+        self.__root_dir = root_dir
+        self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
+        self.__log_dir = os.path.join(self.__root_path, _Log_Default.GROUP_FOLDER_NAME)
+        if self.__root_dir and os.path.exists(self.__root_dir):
+            self.__isExistsPath = True
+        else:
+            self.__isExistsPath = False
+        return self
+
+    def set_root_folder_name(self, root_folder_name: str) -> SELF_LOGGERGROUP:
+        """ 
+        设置日志文件夹名称
+
+        参数:
+        - root_folder_name(str): 日志文件夹名称
+        """
+        if not root_folder_name:
+            self.__root_folder_name = _Log_Default.ROOT_FOLDER_NAME
+        else:
+            self.__root_folder_name = root_folder_name
+        self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
+        self.__log_dir = os.path.join(self.__root_path, _Log_Default.GROUP_FOLDER_NAME)
+        return self
+
+    def set_enable_daily_split(self, enable_flag: bool) -> SELF_LOGGERGROUP:
+        """ 
+        设置是否启用按天分割日志
+
+        参数:
+        - enable_flag(bool): 是否启用按天分割日志        
+        """
+        self.__enableDailySplit: bool = enable_flag
+        return self
+
+    def set_enable_file_output(self, enable_flag: bool) -> SELF_LOGGERGROUP:
+        """ 
+        设置是否启用文件输出
+
+        参数:
+        - enable_flag(bool): 是否启用文件输出
+        """
+        self.__enableFileOutput: bool = enable_flag
+        return self
+
+    def set_file_size_limit_kB(self, size_limit: typing.Union[int, float]) -> SELF_LOGGERGROUP:
+        """ 
+        设置单个日志文件大小限制
+
+        参数:
+        - size_limit(int | float): 单个日志文件大小限制, 单位为KB
+        """
+        if not isinstance(size_limit, (int, float)):
+            raise TypeError("size_limit must be int")
+        self.__limit_single_file_size_Bytes: typing.Union[int, float] = size_limit * 1000
+        return self
+
+    def set_file_count_limit(self, count_limit: int) -> SELF_LOGGERGROUP:
+        """ 
+        设置文件夹中日志文件数量限制
+
+        参数: 
+        - count_limit(int): 文件夹中日志文件数量限制
+        """
+        if not isinstance(count_limit, int):
+            raise TypeError("count_limit must be int")
+        self.__limit_files_count: int = count_limit
+        return self
+
+    def set_file_days_limit(self, days_limit: int) -> SELF_LOGGERGROUP:
+        """ 
+        设置文件夹中日志文件天数限制
+
+        参数: 
+        - days_limit(int): 文件夹中日志文件天数限制
+        """
+        if not isinstance(days_limit, int):
+            raise TypeError("days_limit must be int")
+        self.__limit_files_days: int = days_limit
+        return self
+
+    def set_log_group(self, log_group: list) -> SELF_LOGGERGROUP:
         if not isinstance(log_group, list):
             raise TypeError('log_group must be list')
         if self.__log_group == log_group and self.__initialized:
@@ -1351,8 +1557,9 @@ class LoggerGroup(object):
             self.__connection()
         else:
             self.__connect_all()
+        return self
 
-    def append_log(self, log_obj: typing.Union[Logger, list]) -> None:
+    def append_log(self, log_obj: typing.Union[Logger, list]) -> SELF_LOGGERGROUP:
         if isinstance(log_obj, (list, tuple)):
             self.__log_group += list(log_obj)
             for log in list(log_obj):
@@ -1362,8 +1569,9 @@ class LoggerGroup(object):
             self.__connect_single(log_obj)
         else:
             raise TypeError(f'log_obj must be list or Logger, but got {type(log_obj)}')
+        return self
 
-    def remove_log(self, log_obj: Logger) -> None:
+    def remove_log(self, log_obj: Logger) -> SELF_LOGGERGROUP:
         if not isinstance(log_obj, Logger):
             raise TypeError(f'log_obj must be Logger, but got {type(log_obj)}')
         if log_obj in self.__log_group:
@@ -1371,6 +1579,7 @@ class LoggerGroup(object):
             self.__disconnect_single(log_obj)
         if len(self.__log_group) == 0:
             self.__connect_all()
+        return self
 
     def clear(self) -> None:
         self.__disconnect_all()
@@ -1407,19 +1616,18 @@ class LoggerGroup(object):
     def __set_log_file_path(self) -> None:
         """ 设置日志文件路径 """
         # 支持的字符 {}[];'',.!~@#$%^&()_+-=
-
         if not self.__enableFileOutput or self.__isExistsPath is False:
             return
-        if not hasattr(self, f'_{self.__class__.__name__}__log_sub_folder_path'):  # 初始化, 创建属性
-            self.__start_time_format = self.__start_time.strftime("%Y%m%d_%H'%M'%S")
-            self.__log_sub_folder_path = os.path.join(self.__log_folder_path, _LOG_GROUP_FOLDER_NAME)
-            if not os.path.exists(self.__log_sub_folder_path):
-                os.makedirs(self.__log_sub_folder_path)
-            self.__log_file_path = os.path.join(self.__log_sub_folder_path, f'Global_Log-[{self.__start_time_format}]--0.log')
+        if not hasattr(self, f'_{self.__class__.__name__}__log_file_path'):  # 初始化, 创建属性
+            self.__start_time_format: str = self.__start_time.strftime("%Y%m%d_%H'%M'%S")
+            self.__log_dir: str = os.path.join(self.__root_path, _Log_Default.GROUP_FOLDER_NAME)
+            if not os.path.exists(self.__log_dir):
+                os.makedirs(self.__log_dir)
+            self.__log_file_path: str = os.path.join(self.__log_dir, f'Global_Log-[{self.__start_time_format}]--0.log')
         else:
-            file_name = os.path.splitext(os.path.basename(self.__log_file_path))[0]
+            file_name: str = os.path.splitext(os.path.basename(self.__log_file_path))[0]
             str_list = file_name.split('--')
-            self.__log_file_path = os.path.join(self.__log_sub_folder_path, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
+            self.__log_file_path = os.path.join(self.__log_dir, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
 
     def __clear_files(self) -> None:
         """
@@ -1429,7 +1637,7 @@ class LoggerGroup(object):
             return
         if (not isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) or (not isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
             return
-        current_folder_path = os.path.join(self.__log_folder_path, _LOG_GROUP_FOLDER_NAME)
+        current_folder_path = os.path.join(self.__root_dir, _Log_Default.GROUP_FOLDER_NAME)
         if not os.path.exists(current_folder_path):
             return
         current_file_list = []
@@ -1475,14 +1683,14 @@ class LoggerGroup(object):
 # <file time> This log file is created at\t {file_time}.
 {'#'*66}\n\n{message}"""
             self.__current_size = len(message.encode('utf-8'))
-        if not os.path.exists(self.__log_folder_path):
-            os.makedirs(self.__log_folder_path)
-        if not os.path.exists(self.__log_sub_folder_path):
-            os.makedirs(self.__log_sub_folder_path)
+        if not os.path.exists(self.__root_dir):
+            os.makedirs(self.__root_dir)
+        if not os.path.exists(self.__log_dir):
+            os.makedirs(self.__log_dir)
         self.__clear_files()
-
-        with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
-            f.write(message)
+        with self.__thread_lock:
+            with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
+                f.write(message)
 
     def __connect_single(self, log_obj: Logger) -> None:
         if log_obj in self.__log_group:
@@ -1553,15 +1761,14 @@ class LoggerGroup(object):
         log_obj.signal_critical_message.disconnect(self.signal_critical_message)
 
 
-""" 
 if __name__ == '__main__':
     Log = Logger('Log', os.path.dirname(__file__), log_level='info')
     Log.set_file_size_limit_kB(1024)
-    Log.setEnableDailySplit(True)
+    Log.set_enable_daily_split(True)
     Log.set_listen_logging(level=LogLevel.INFO)
-    Log_1 = Logger('Log_1', os.path.dirname(__file__), log_sub_folder_name='test_folder', log_level=LogLevel.TRACE)
+    Log_1 = Logger('Log_1', os.path.dirname(__file__), log_folder_name='test_folder', log_level=LogLevel.TRACE)
     Log_1.set_file_size_limit_kB(1024)
-    Log_1.setEnableDailySplit(True)
+    Log_1.set_enable_daily_split(True)
     Log.signal_debug_message.connect(print)
     Logger_group = LoggerGroup(os.path.dirname(__file__))
     logging.debug('hello world from logging debug')  # logging 跟踪示例
@@ -1569,11 +1776,10 @@ if __name__ == '__main__':
     logging.error("This is a error message from logging.")
     logging.warning("This is a warning message from logging.")
     logging.critical("This is a critical message from logging.")
-    Log.trace('This is a trace message.')
+    # Log.trace('This is a trace message.')
     Log.debug('This is a debug message.')
-    Log_1.debug('This is a debug message.')
-    Log.info('This is a info message.')
-    Log_1.warning('This is a warning message.')
-    Log.error('This is a error message.')
-    Log_1.critical('This is a critical message.')
-"""
+    # Log_1.debug('This is a debug message.')
+    # Log.info('This is a info message.')
+    # Log_1.warning('This is a warning message.')
+    # Log.error('This is a error message.')
+    # Log_1.critical('This is a critical message.')

@@ -9,6 +9,9 @@ import logging
 import threading
 from datetime import datetime
 import typing
+import zipfile
+import atexit
+
 
 try:
     from PyQt5.QtCore import QThread
@@ -195,6 +198,15 @@ class LogLevel(_EnumBase):
     CRITICAL = 60
     NOOUT = 70
 
+    Notset = NOTSET
+    Trace = TRACE
+    Debug = DEBUG
+    Info = INFO
+    Warning = WARNING
+    Error = ERROR
+    Critical = CRITICAL
+    Noout = NOOUT
+
     @staticmethod
     def _normalize_log_level(log_level: typing.Union[str, int, 'LogLevel']) -> 'LogLevel':
         normalized_log_level = 0
@@ -222,7 +234,7 @@ class _BoundSignal:
     __qualname__: str = 'LogSignal'
 
     def __init__(self, types, owner, name, isClassSignal=False):
-        if all([isinstance(typ, (type, tuple)) for typ in types]):
+        if all([isinstance(typ, (type, tuple, typing.TypeVar)) for typ in types]):
             self.__types = types
         else:
             raise TypeError('types must be a tuple of types')
@@ -253,6 +265,8 @@ class _BoundSignal:
         if required_types_count != args_count:
             raise TypeError(f'LogSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.')
         for arg, (idx, required_type) in zip(args, enumerate(required_types)):
+            if isinstance(required_type, typing.TypeVar):
+                continue
             if not isinstance(arg, required_type):
                 required_name = required_type.__name__
                 actual_name = type(arg).__name__
@@ -405,6 +419,23 @@ class _LogMessageItem(object):
 
     def set_highlight_type(self, highlight_type: LogHighlightType) -> None:
         self.__highlight_type: LogHighlightType = highlight_type
+
+
+SELF_COMPRESSTHREAD = typing.TypeVar('SELF_COMPRESSTHREAD', bound='CompressThread')
+
+
+class CompressThread(threading.Thread):
+    finished = _LogSignal(SELF_COMPRESSTHREAD)
+
+    def __init__(self, name, func, *args, **kwargs):
+        super().__init__(name=name, target=func, daemon=True, args=args, kwargs=kwargs)
+        self.__func = func
+        self.__args = args
+        self.__kwargs = kwargs
+
+    def run(self):
+        self.__func(*self.__args, **self.__kwargs)
+        self.finished.emit(self)
 
 
 SELF_LOGGER = typing.TypeVar('SELF_LOGGER', bound='Logger')
@@ -601,7 +632,6 @@ class Logger(object):
         self.__enableFileOutput: bool = enableFileOutput if isinstance(enableFileOutput, bool) else True
         self.__enableQThreadtracking: bool = False
         self.__kwargs: dict = kwargs
-        self.__thread_lock = threading.Lock()
         self.__init_params()
         self.__clear_files()
 
@@ -627,6 +657,11 @@ class Logger(object):
         return f'Logger<"{self.__log_name}"> with level <{self.__log_level}"{self.__level_color_dict[self.__log_level].text}"> at 0x{id(self):016x}'
 
     def __init_params(self) -> None:
+        atexit.register(self.__compress_current_old_log_end)
+        self.__thread_write_log_lock = threading.Lock()
+        self.__thread_compress_lock = threading.Lock()
+        self.__log_file_path_last_queue = queue.Queue()
+        self.__compression_thread_pool = set()
         self.__limit_single_file_size_Bytes = -1
         self.__limit_files_count = -1
         self.__limit_files_days = -1
@@ -635,10 +670,13 @@ class Logger(object):
         self.__dict__.update(self.__kwargs)
         self.__message_queue = queue.Queue()
         self.__enableDailySplit = False
+        self.__enableRuntimeZip = False
+        self.__enableStartupZip = False
         self.__isWriting = False
         self.__self_class_name: str = self.__class__.__name__
         self.__self_module_name: str = os.path.splitext(os.path.basename(__file__))[0]
         self.__start_time_log = datetime.now()
+        self.__zip_file_path = ''
         self.__var_dict: dict = {  # 日志变量字典
             'logName': _LogMessageItem('logName', font_color=_ColorMap.CYAN.name, highlight_type=self.__highlight_type),
             'asctime': _LogMessageItem('asctime', font_color=_ColorMap.GREEN.name, highlight_type=self.__highlight_type, bold=True),
@@ -698,14 +736,25 @@ class Logger(object):
         if not self.__enableFileOutput or self.__isExistsPath is False:
             return
         if not hasattr(self, f'_{self.__class__.__name__}__log_file_path'):  # 初始化, 创建属性
-            self.__start_time_format = self.__start_time_log.strftime("%Y%m%d_%H'%M'%S")
+            self.__start_time_format = self.__start_time_log.strftime("%Y%m%d_%H%M%S")
             if not os.path.exists(self.__log_dir):
                 os.makedirs(self.__log_dir)
             self.__log_file_path = os.path.join(self.__log_dir, f'{self.__log_name}-[{self.__start_time_format}]--0.log')
+            if os.path.exists(self.__log_file_path):
+                index = 1
+                while True:
+                    self.__log_file_path = os.path.join(self.__log_dir, f'{self.__log_name}-[{self.__start_time_format}]_{index}--0.log')
+                    if not os.path.exists(self.__log_file_path):
+                        break
+                    index += 1
+            str_list = os.path.splitext(os.path.basename(self.__log_file_path))[0].split('--')
         else:
+            self.__log_file_path_last_queue.put(self.__log_file_path)
             file_name = os.path.splitext(os.path.basename(self.__log_file_path))[0]
             str_list = file_name.split('--')
             self.__log_file_path = os.path.join(self.__log_dir, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
+        if not self.__zip_file_path:
+            self.__zip_file_path = os.path.join(self.__log_dir, f'{str_list[0]}--Compressed.zip')
 
     def __setattr__(self, name: str, value) -> None:
         if hasattr(self, '_Logger__kwargs') and name != '_Logger__kwargs' and name in self.__kwargs:
@@ -850,38 +899,77 @@ class Logger(object):
         if sys.stdout:
             sys.stdout.write(message)
 
+    def __compress_current_old_log(self) -> None:
+        """压缩当前轮转出来的旧日志（非启动前的历史日志）"""
+        with self.__thread_compress_lock:
+            if not self.__log_file_path_last_queue.empty():
+                last_log_file_path = self.__log_file_path_last_queue.get()
+                try:
+                    with zipfile.ZipFile(self.__zip_file_path, 'a', zipfile.ZIP_DEFLATED) as zipf:
+                        arcname = os.path.basename(last_log_file_path)
+                        if arcname in zipf.namelist():
+                            return
+                        zipf.write(last_log_file_path, arcname=arcname)
+                    os.remove(last_log_file_path)
+                except Exception as e:
+                    self.__output(level=LogLevel.CRITICAL, message=f"Failed to compress log data. {last_log_file_path}: {e}")
+
+    def __run_async_rotated_log_compression(self):
+        if self.__log_file_path_last_queue.empty() or not self.__enableRuntimeZip:
+            return
+        zip_dir = os.path.dirname(self.__zip_file_path)
+        if not os.path.exists(zip_dir):
+            os.makedirs(zip_dir)
+        t = CompressThread(name=f'RotatedLogCompressThread-{len(self.__compression_thread_pool)}', func=self.__compress_current_old_log)
+        t.finished.connect(self.__compress_current_old_log_finished)
+        self.__compression_thread_pool.add(t)
+        t.start()
+
+    def __compress_current_old_log_finished(self, thread_obj: CompressThread):
+        self.__compression_thread_pool.discard(thread_obj)
+
+    def __compress_current_old_log_end(self):
+        try:
+            self.__log_file_path_last_queue.put(self.__log_file_path)
+            self.__compress_current_old_log()
+            time.sleep(0.5)
+        except:
+            pass
+
     def __write(self, message: str) -> None:
         """ 写入日志信息 """
         if not self.__enableFileOutput or self.__isExistsPath is False:
             return
-        if self.__limit_single_file_size_Bytes and self.__limit_single_file_size_Bytes > 0:
-            # 大小限制
-            writting_size = len(message.encode('utf-8'))
-            self.__current_size += writting_size
-            if self.__current_size >= self.__limit_single_file_size_Bytes:
-                self.__isNewFile = True
-        if self.__enableDailySplit:
-            # 按天分割
-            if datetime.today().date() != self.__current_day:
-                self.__isNewFile = True
-        if self.__isNewFile:
-            # 创建新文件
-            self.__isNewFile = False
-            self.__set_log_file_path()
-            self.__current_day = datetime.today().date()
-            file_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            start_time = self.__start_time_log.strftime('%Y-%m-%d %H:%M:%S')
-            message = f"""{'#'*66}
-# <start time> This Program is started at\t {start_time}.
-# <file time> This log file is created at\t {file_time}.
-{'#'*66}\n\n{message}"""
-            self.__current_size = len(message.encode('utf-8'))
-        if not os.path.exists(self.__log_dir):
-            os.makedirs(self.__log_dir)
-        # 清理旧日志文件
-        self.__clear_files()
-        # 写入新日志文件
-        with self.__thread_lock:
+        with self.__thread_write_log_lock:  # 避免多线程创建、写入文件
+            if self.__limit_single_file_size_Bytes and self.__limit_single_file_size_Bytes > 0:
+                # 大小限制
+                writting_size = len(message.encode('utf-8'))
+                self.__current_size += writting_size
+                if self.__current_size >= self.__limit_single_file_size_Bytes:
+                    self.__isNewFile = True
+            if self.__enableDailySplit:
+                # 按天分割
+                if datetime.today().date() != self.__current_day:
+                    self.__isNewFile = True
+            if self.__isNewFile:
+                # 创建新文件
+                self.__isNewFile = False
+                self.__set_log_file_path()
+                self.__current_day = datetime.today().date()
+                file_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                start_time = self.__start_time_log.strftime('%Y-%m-%d %H:%M:%S')
+                message = f"""{'#'*66}
+    # <start time> This Program is started at\t {start_time}.
+    # <file time> This log file is created at\t {file_time}.
+    {'#'*66}\n\n{message}"""
+                self.__current_size = len(message.encode('utf-8'))
+                self.__run_async_rotated_log_compression()
+            # 防止文件夹写入前意外被删除
+            if not os.path.exists(self.__log_dir):
+                os.makedirs(self.__log_dir)
+            # 清理旧日志文件
+            self.__clear_files()
+            # 写入新日志文件
             with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
                 f.write(message)
 
@@ -1216,6 +1304,26 @@ class Logger(object):
         self.__enableFileOutput = enable_flag
         return self
 
+    def set_enable_runtime_zip(self, enable: bool) -> SELF_LOGGER:
+        """ 
+        设置是否在运行时压缩日志文件
+
+        参数:
+        - enable(bool): 是否在运行时压缩日志文件
+        """
+        self.__enableRuntimeZip: bool = enable
+        return self
+
+    # def set_enable_startup_zip(self, enable: bool) -> SELF_LOGGER:
+    #     """
+    #     设置是否在运行前压缩日志文件
+
+    #     参数:
+    #     - enable(bool): 是否在运行前压缩日志文件
+    #     """
+    #     self.__enableStartupZip = enable
+    #     return self
+
     def set_file_size_limit_kB(self, size_limit: typing.Union[int, float]) -> SELF_LOGGER:
         """ 
         设置单个日志文件大小限制
@@ -1451,12 +1559,19 @@ class LoggerGroup(object):
         self.__current_day = datetime.today().date()
         self.__log_group = []
         self.__exclude_logs = exclude_logs if isinstance(exclude_logs, list) else []
-        self.__initialized = False
+        self.__isInitializationFinished = False
         self.__thread_lock = threading.Lock()
+        self.__thread_compress_lock = threading.Lock()
+        self.__log_file_path_last_queue = queue.Queue()
+        self.__compression_thread_pool = set()
+        self.__enableRuntimeZip = False
+        self.__enableStartupZip = False
+        self.__zip_file_path = ''
         self.__set_log_file_path()
         self.set_log_group(log_group)
         self.__clear_files()
-        self.__initialized = True
+        atexit.register(self.__compress_current_old_log_end)
+        self.__isInitializationFinished = True
 
     def set_root_dir(self, root_dir: str) -> SELF_LOGGERGROUP:
         """ 
@@ -1509,6 +1624,26 @@ class LoggerGroup(object):
         self.__enableFileOutput: bool = enable_flag
         return self
 
+    def set_enable_runtime_zip(self, enable: bool) -> SELF_LOGGERGROUP:
+        """ 
+        设置是否在运行时压缩日志文件
+
+        参数:
+        - enable(bool): 是否在运行时压缩日志文件
+        """
+        self.__enableRuntimeZip: bool = enable
+        return self
+
+    # def set_enable_startup_zip(self, enable: bool) -> SELF_LOGGERGROUP:
+    #     """
+    #     设置是否在运行前压缩日志文件
+
+    #     参数:
+    #     - enable(bool): 是否在运行前压缩日志文件
+    #     """
+    #     self.__enableStartupZip = enable
+    #     return self
+
     def set_file_size_limit_kB(self, size_limit: typing.Union[int, float]) -> SELF_LOGGERGROUP:
         """ 
         设置单个日志文件大小限制
@@ -1548,7 +1683,7 @@ class LoggerGroup(object):
     def set_log_group(self, log_group: list) -> SELF_LOGGERGROUP:
         if not isinstance(log_group, list):
             raise TypeError('log_group must be list')
-        if self.__log_group == log_group and self.__initialized:
+        if self.__log_group == log_group and self.__isInitializationFinished:
             return
         self.__log_group = log_group
         self.__disconnect(log_group)
@@ -1619,15 +1754,26 @@ class LoggerGroup(object):
         if not self.__enableFileOutput or self.__isExistsPath is False:
             return
         if not hasattr(self, f'_{self.__class__.__name__}__log_file_path'):  # 初始化, 创建属性
-            self.__start_time_format: str = self.__start_time.strftime("%Y%m%d_%H'%M'%S")
+            self.__start_time_format: str = self.__start_time.strftime("%Y%m%d_%H%M%S")
             self.__log_dir: str = os.path.join(self.__root_path, _Log_Default.GROUP_FOLDER_NAME)
             if not os.path.exists(self.__log_dir):
                 os.makedirs(self.__log_dir)
             self.__log_file_path: str = os.path.join(self.__log_dir, f'Global_Log-[{self.__start_time_format}]--0.log')
+            if os.path.exists(self.__log_file_path):
+                index = 1
+                while True:
+                    self.__log_file_path = os.path.join(self.__log_dir, f'Global_Log-[{self.__start_time_format}]_{index}--0.log')
+                    if not os.path.exists(self.__log_file_path):
+                        break
+                    index += 1
+            str_list = os.path.splitext(os.path.basename(self.__log_file_path))[0].split('--')
         else:
+            self.__log_file_path_last_queue.put(self.__log_file_path)
             file_name: str = os.path.splitext(os.path.basename(self.__log_file_path))[0]
             str_list = file_name.split('--')
             self.__log_file_path = os.path.join(self.__log_dir, f'{str_list[0]}--{int(str_list[-1]) + 1}.log')
+        if not self.__zip_file_path:
+            self.__zip_file_path = os.path.join(self.__log_dir, f'{str_list[0]}--Compressed.zip')
 
     def __clear_files(self) -> None:
         """
@@ -1657,6 +1803,44 @@ class LoggerGroup(object):
                 if (datetime.today() - datetime.fromtimestamp(os.path.getctime(file_path))).days > self.__limit_files_days:
                     os.remove(file_path)
 
+    def __compress_current_old_log(self) -> None:
+        """压缩当前轮转出来的旧日志（非启动前的历史日志）"""
+        with self.__thread_compress_lock:
+            if not self.__log_file_path_last_queue.empty():
+                last_log_file_path = self.__log_file_path_last_queue.get()
+                try:
+                    with zipfile.ZipFile(self.__zip_file_path, 'a', zipfile.ZIP_DEFLATED) as zipf:
+                        arcname = os.path.basename(last_log_file_path)
+                        if arcname in zipf.namelist():
+                            return
+                        zipf.write(last_log_file_path, arcname=arcname)
+                    os.remove(last_log_file_path)
+                except Exception as e:
+                    raise e
+                    pass  # TODO
+
+    def __run_async_rotated_log_compression(self):
+        if self.__log_file_path_last_queue.empty() or not self.__enableRuntimeZip:
+            return
+        zip_dir = os.path.dirname(self.__zip_file_path)
+        if not os.path.exists(zip_dir):
+            os.makedirs(zip_dir)
+        t = CompressThread(name=f'RotatedLogCompressThread<LoggerGroup>-{len(self.__compression_thread_pool)}', func=self.__compress_current_old_log)
+        t.finished.connect(self.__compress_current_old_log_finished)
+        self.__compression_thread_pool.add(t)
+        t.start()
+
+    def __compress_current_old_log_finished(self, thread_obj: CompressThread):
+        self.__compression_thread_pool.discard(thread_obj)
+
+    def __compress_current_old_log_end(self):
+        try:
+            self.__log_file_path_last_queue.put(self.__log_file_path)
+            self.__compress_current_old_log()
+            time.sleep(0.5)
+        except:
+            pass
+
     def __write(self, message: str) -> None:
         """ 写入日志信息 """
         if not self.__enableFileOutput or self.__isExistsPath is False:
@@ -1683,6 +1867,7 @@ class LoggerGroup(object):
 # <file time> This log file is created at\t {file_time}.
 {'#'*66}\n\n{message}"""
             self.__current_size = len(message.encode('utf-8'))
+            self.__run_async_rotated_log_compression()
         if not os.path.exists(self.__root_dir):
             os.makedirs(self.__root_dir)
         if not os.path.exists(self.__log_dir):
@@ -1766,11 +1951,14 @@ if __name__ == '__main__':
     Log.set_file_size_limit_kB(1024)
     Log.set_enable_daily_split(True)
     Log.set_listen_logging(level=LogLevel.INFO)
+    Log.set_enable_runtime_zip(True)
     Log_1 = Logger('Log_1', os.path.dirname(__file__), log_folder_name='test_folder', log_level=LogLevel.TRACE)
     Log_1.set_file_size_limit_kB(1024)
     Log_1.set_enable_daily_split(True)
     Log.signal_debug_message.connect(print)
     Logger_group = LoggerGroup(os.path.dirname(__file__))
+    Logger_group.set_file_size_limit_kB(1024)
+    Logger_group.set_enable_runtime_zip(True)
     logging.debug('hello world from logging debug')  # logging 跟踪示例
     logging.info('hello world from logging info')
     logging.error("This is a error message from logging.")
@@ -1778,6 +1966,11 @@ if __name__ == '__main__':
     logging.critical("This is a critical message from logging.")
     # Log.trace('This is a trace message.')
     Log.debug('This is a debug message.')
+    for i in range(100):
+        Log.info(f'This is a info message -- {i}.'*100000)
+    import time
+    time.sleep(1)
+
     # Log_1.debug('This is a debug message.')
     # Log.info('This is a info message.')
     # Log_1.warning('This is a warning message.')

@@ -7,7 +7,7 @@ class _BoundSignal:
     __qualname__: str = 'EventSignal'
 
     def __init__(self, types, owner, name, isClassSignal=False) -> None:
-        if all([isinstance(typ, (type, tuple)) for typ in types]):
+        if all([isinstance(typ, (type, tuple, typing.TypeVar)) for typ in types]):
             self.__types = types
         else:
             raise TypeError('types must be a tuple of types')
@@ -36,6 +36,8 @@ class _BoundSignal:
         if required_types_count != args_count:
             raise TypeError(f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.')
         for arg, (idx, required_type) in zip(args, enumerate(required_types)):
+            if isinstance(required_type, typing.TypeVar):
+                continue
             if not isinstance(arg, required_type):
                 required_name = required_type.__name__
                 actual_name = type(arg).__name__

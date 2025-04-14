@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "DToolslib"
-version = "0.0.1.8"
+version = "0.0.2.0"
 description = "A simple and miscellaneous utility library containing multiple utility scripts. 一个简单且杂的工具库, 包含多个工具脚本"
 authors = [{ name = "Jf-JIN" }]
 readme = "README.md"
@@ -18,6 +18,7 @@ classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries",
@@ -41,7 +42,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/Jf-JIN/DToolslib"
 Repository = "https://github.com/Jf-JIN/DToolslib"
-# Documentation = "https://your-package.readthedocs.io"
+Documentation = "https://github.com/Jf-JIN/DToolslib/wiki"
 # Changelog = "https://github.com/yourusername/your-package/releases"
 
 # 动态版本管理 (推荐使用 setuptools-scm)

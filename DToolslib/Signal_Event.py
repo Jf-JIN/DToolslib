@@ -1,12 +1,15 @@
 
 import typing
+import threading
+import queue
+import time
 
 
 class _BoundSignal:
     __name__: str = 'EventSignal'
     __qualname__: str = 'EventSignal'
 
-    def __init__(self, types, owner, name, isClassSignal=False) -> None:
+    def __init__(self, types, owner, name, isClassSignal=False, async_exec=False) -> None:
         if all([isinstance(typ, (type, tuple, typing.TypeVar)) for typ in types]):
             self.__types = types
         else:
@@ -14,7 +17,28 @@ class _BoundSignal:
         self.__owner = owner
         self.__name = name
         self.__isClassSignal: bool = isClassSignal
+        self.__async_exec: bool = async_exec
+        self.__queue_slot = queue.Queue()
         self.__slots = []
+        if self.__async_exec:
+            self.__thread_async_thread = threading.Thread(target=self.__process_queue, name=f'EventSignal_AsyncThread_{self.__name}', daemon=True)
+            self.__thread_async_thread.start()
+
+    def __process_queue(self):
+        while True:
+            params: tuple = self.__queue_slot.get()
+            slot: typing.Callable = params[0]
+            args: tuple = params[1]
+            kwargs: dict = params[2]
+            done_event: threading.Event | None = params[3]
+            try:
+                slot(*args, **kwargs)
+            except Exception as e:
+                print(f"[{self.__name}] Slot error: {e}")
+            finally:
+                if done_event:
+                    done_event.set()
+                self.__queue_slot.task_done()
 
     def connect(self, slot: typing.Union['EventSignal', typing.Callable]) -> None:
         if callable(slot):
@@ -29,7 +53,10 @@ class _BoundSignal:
         if slot in self.__slots:
             self.__slots.remove(slot)
 
-    def emit(self, *args, **kwargs) -> None:
+    def emit(self, *args, blocking: bool = False, timeout: float | None = None, **kwargs) -> None:
+        """ 
+        The blocking and timeout options are only valid if the signal is executed in an asynchronous manner.
+        """
         required_types = self.__types
         required_types_count = len(self.__types)
         args_count = len(args)
@@ -43,8 +70,26 @@ class _BoundSignal:
                 actual_name = type(arg).__name__
                 raise TypeError(f'EventSignal "{self.__name} {idx+1}th argument requires "{required_name}", got "{actual_name}" instead.')
         slots = self.__slots
+        done_events = []
         for slot in slots:
-            slot(*args, **kwargs)
+            if not self.__async_exec:
+                slot(*args, **kwargs)
+            else:
+                done_event = threading.Event() if blocking else None
+                self.__queue_slot.put((slot, args, kwargs, done_event))
+                if done_event:
+                    done_events.append(done_event)
+
+        if blocking and self.__async_exec:
+            start_time = time.time()
+            for event in done_events:
+                event: threading.Event
+                remaining = None
+                if timeout is not None:
+                    elapsed = time.time() - start_time
+                    remaining = max(0, timeout - elapsed)
+                if not event.wait(timeout=remaining):
+                    raise TimeoutError(f"EventSignal '{self.__name}' timed out")
 
     def __str__(self) -> str:
         owner_repr = (
@@ -81,9 +126,10 @@ class EventSignal:
         emit: 发射信号, Emit signal.
     """
 
-    def __init__(self, *types: typing.Union[type, tuple], signal_scope: str = 'instance') -> None:
+    def __init__(self, *types: typing.Union[type, tuple], signal_scope: str = 'instance', async_exec: bool = False) -> None:
         self.__types = types
         self.__scope = signal_scope
+        self.__async_exec = async_exec
 
     def __get__(self, instance, instance_type) -> _BoundSignal:
         if instance is None:
@@ -108,7 +154,8 @@ class EventSignal:
                 self.__types,
                 instance_type,
                 self.__name,
-                isClassSignal=True
+                isClassSignal=True,
+                async_exec=self.__async_exec
             )
         return instance_type.__class_signals__[self]
 
@@ -119,7 +166,9 @@ class EventSignal:
             instance.__signals__[self] = _BoundSignal(
                 self.__types,
                 instance,
-                self.__name
+                self.__name,
+                isClassSignal=False,
+                async_exec=self.__async_exec
             )
         return instance.__signals__[self]
 

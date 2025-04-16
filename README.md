@@ -175,6 +175,9 @@ Interior Decorators
 
 # 版本信息 Version Info
 
+#### v0.0.2.1
+* 增加信号的异步执行, 但无线程锁, 不保证线程安全
+
 #### v0.0.1.7
 
 * Added support for Python 3.8

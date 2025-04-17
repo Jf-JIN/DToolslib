@@ -968,7 +968,7 @@ class Logger(object):
             if not os.path.exists(self.__log_dir):
                 os.makedirs(self.__log_dir)
             # 清理旧日志文件
-            self.__clear_files()
+            # self.__clear_files()
             # 写入新日志文件
             with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
                 f.write(message)
@@ -1346,6 +1346,7 @@ class Logger(object):
         if not isinstance(count_limit, int):
             raise TypeError("count_limit must be int")
         self.__limit_files_count: int = count_limit
+        self.__clear_files()
         return self
 
     def set_file_days_limit(self, days_limit: int) -> SELF_LOGGER:
@@ -1358,6 +1359,7 @@ class Logger(object):
         if not isinstance(days_limit, int):
             raise TypeError("days_limit must be int")
         self.__limit_files_days: int = days_limit
+        self.__clear_files()
         return self
 
     def set_message_format(self, message_format: str) -> SELF_LOGGER:
@@ -1515,7 +1517,6 @@ class LoggerGroup(object):
         self,
         root_dir: str = '',
         root_folder_name: str = '',
-        log_folder_name: str = '',
         log_group: list = [],
         exclude_logs: list = [],
         limit_single_file_size_kB: int = -1,  # KB
@@ -1666,6 +1667,7 @@ class LoggerGroup(object):
         if not isinstance(count_limit, int):
             raise TypeError("count_limit must be int")
         self.__limit_files_count: int = count_limit
+        self.__clear_files()
         return self
 
     def set_file_days_limit(self, days_limit: int) -> SELF_LOGGERGROUP:
@@ -1678,6 +1680,7 @@ class LoggerGroup(object):
         if not isinstance(days_limit, int):
             raise TypeError("days_limit must be int")
         self.__limit_files_days: int = days_limit
+        self.__clear_files()
         return self
 
     def set_log_group(self, log_group: list) -> SELF_LOGGERGROUP:
@@ -1781,9 +1784,10 @@ class LoggerGroup(object):
         """
         if self.__isExistsPath is False:
             return
-        if (not isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) or (not isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
+        if not (isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) and not (isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
             return
-        current_folder_path = os.path.join(self.__root_dir, _Log_Default.GROUP_FOLDER_NAME)
+        current_folder_path = os.path.join(self.__root_path, _Log_Default.GROUP_FOLDER_NAME)
+        print(not os.path.exists(current_folder_path), current_folder_path)
         if not os.path.exists(current_folder_path):
             return
         current_file_list = []
@@ -1872,7 +1876,7 @@ class LoggerGroup(object):
             os.makedirs(self.__root_dir)
         if not os.path.exists(self.__log_dir):
             os.makedirs(self.__log_dir)
-        self.__clear_files()
+        # self.__clear_files()
         with self.__thread_lock:
             with open(self.__log_file_path, 'a+', encoding='utf-8') as f:
                 f.write(message)

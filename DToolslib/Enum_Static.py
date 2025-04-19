@@ -108,16 +108,12 @@ _analog_define_dict = {
 
 
 class _StaticEnumDict(dict):
-    """
-    用于存储枚举项的字典类, 检查重复定义项
-    """
-
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._cls_name = None
         self._member_names = {}
 
-    def __setitem__(self, key: str, value):
+    def __setitem__(self, key: str, value) -> None:
         if key in self._member_names:
             raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
         if (type(value) in _analog_define_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
@@ -129,20 +125,14 @@ class _StaticEnumDict(dict):
 
 
 class _StaticEnumMeta(type):
-    """
-    枚举类的元类
-    """
     @classmethod
     def __prepare__(metacls, cls, bases, **kwds) -> _StaticEnumDict:
-        """
-        用于创建枚举项的字典类, 以便之后查找相同的枚举项
-        """
         enum_dict = _StaticEnumDict()
         enum_dict._cls_name = cls
         return enum_dict
 
     def __new__(mcs, name, bases, dct: dict):
-        def _convert_to_enum_item(cls, key, value):
+        def _convert_to_enum_item(cls, key, value) -> None:
             cls_dict = dict(value.__dict__)
             flag_allow_new_attr = False
             for sub_key, sub_value in cls_dict.items():
@@ -238,21 +228,24 @@ class StaticEnum(metaclass=_StaticEnumMeta):
     def __getattr__(self, item):
         return self.__members__['data'][item]
 
-    def items(self):
-        return self.__members__['data'].items()
+    @classmethod
+    def items(cls):
+        return cls.__members__['data'].items()
 
-    def keys(self):
-        return self.__members__['data'].keys()
+    @classmethod
+    def keys(cls):
+        return cls.__members__['data'].keys()
 
-    def values(self):
-        return self.__members__['data'].values()
+    @classmethod
+    def values(cls):
+        return cls.__members__['data'].values()
 
     @classmethod
     def getItem(cls, item):
         for key, value in cls.__members__['data'].items():
             if value == item:
                 return value
-        raise AttributeError(f'Item {item} not found in {self.__class__.__name__}')
+        raise AttributeError(f'Item {item} not found in {cls.__name__}')
 
 
 """ 

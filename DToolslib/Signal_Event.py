@@ -19,6 +19,7 @@ class _BoundSignal:
         self.__isClassSignal: bool = isClassSignal
         self.__async_exec: bool = async_exec
         self.__queue_slot = queue.Queue()
+        self.__thread_lock = threading.Lock()
         self.__slots = []
         if self.__async_exec:
             self.__thread_async_thread = threading.Thread(target=self.__process_queue, name=f'EventSignal_AsyncThread_{self.__name}', daemon=True)
@@ -41,55 +42,64 @@ class _BoundSignal:
                 self.__queue_slot.task_done()
 
     def connect(self, slot: typing.Union['EventSignal', typing.Callable]) -> None:
-        if callable(slot):
-            if slot not in self.__slots:
-                self.__slots.append(slot)
-        elif isinstance(slot, _BoundSignal):
-            self.__slots.append(slot.emit)
-        else:
-            raise ValueError('Slot must be callable')
+        with self.__thread_lock:
+            if callable(slot):
+                if slot not in self.__slots:
+                    self.__slots.append(slot)
+            elif isinstance(slot, _BoundSignal):
+                self.__slots.append(slot.emit)
+            else:
+                raise ValueError('Slot must be callable')
 
     def disconnect(self, slot: typing.Union['EventSignal', typing.Callable]) -> None:
-        if slot in self.__slots:
-            self.__slots.remove(slot)
+        with self.__thread_lock:
+            if callable(slot):
+                if slot in self.__slots:
+                    self.__slots.remove(slot)
+            elif isinstance(slot, _BoundSignal):
+                if slot.emit in self.__slots:
+                    self.__slots.remove(slot.emit)
+            else:
+                raise ValueError('Slot must be callable')
 
     def emit(self, *args, blocking: bool = False, timeout: float | None = None, **kwargs) -> None:
         """ 
         The blocking and timeout options are only valid if the signal is executed in an asynchronous manner.
         """
-        required_types = self.__types
-        required_types_count = len(self.__types)
-        args_count = len(args)
-        if required_types_count != args_count:
-            raise TypeError(f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.')
-        for arg, (idx, required_type) in zip(args, enumerate(required_types)):
-            if isinstance(required_type, typing.TypeVar):
-                continue
-            if not isinstance(arg, required_type):
-                required_name = required_type.__name__
-                actual_name = type(arg).__name__
-                raise TypeError(f'EventSignal "{self.__name} {idx+1}th argument requires "{required_name}", got "{actual_name}" instead.')
-        slots = self.__slots
-        done_events = []
-        for slot in slots:
-            if not self.__async_exec:
-                slot(*args, **kwargs)
-            else:
-                done_event = threading.Event() if blocking else None
-                self.__queue_slot.put((slot, args, kwargs, done_event))
-                if done_event:
-                    done_events.append(done_event)
+        with self.__thread_lock:
+            required_types = self.__types
+            required_types_count = len(self.__types)
+            args_count = len(args)
+            if required_types_count != args_count:
+                raise TypeError(f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.')
+            for arg, (idx, required_type) in zip(args, enumerate(required_types)):
+                if isinstance(required_type, typing.TypeVar):
+                    continue
+                if not isinstance(arg, required_type):
+                    required_name = required_type.__name__
+                    actual_name = type(arg).__name__
+                    raise TypeError(f'EventSignal "{self.__name} {idx+1}th argument requires "{required_name}", got "{actual_name}" instead.')
+            slots = self.__slots
+            done_events = []
+            for slot in slots:
+                if not self.__async_exec:
+                    slot(*args, **kwargs)
+                else:
+                    done_event = threading.Event() if blocking else None
+                    self.__queue_slot.put((slot, args, kwargs, done_event))
+                    if done_event:
+                        done_events.append(done_event)
 
-        if blocking and self.__async_exec:
-            start_time = time.time()
-            for event in done_events:
-                event: threading.Event
-                remaining = None
-                if timeout is not None:
-                    elapsed = time.time() - start_time
-                    remaining = max(0, timeout - elapsed)
-                if not event.wait(timeout=remaining):
-                    raise TimeoutError(f"EventSignal '{self.__name}' timed out")
+            if blocking and self.__async_exec:
+                start_time = time.time()
+                for event in done_events:
+                    event: threading.Event
+                    remaining = None
+                    if timeout is not None:
+                        elapsed = time.time() - start_time
+                        remaining = max(0, timeout - elapsed)
+                    if not event.wait(timeout=remaining):
+                        raise TimeoutError(f"EventSignal '{self.__name}' timed out")
 
     def __str__(self) -> str:
         owner_repr = (
@@ -108,22 +118,20 @@ class _BoundSignal:
 
 class EventSignal:
     """ 
-    事件信号, 当前不支持线程锁和异步操作
-    Event signal, thread lock and asynchronous operations are not currently supported
+    事件信号, 属性保护和异步操作, 同时线程安全
+    Event signal, attribute protection and asynchronous operations are supported, 
+    and it is thread-safe.
 
-    属性保护 
-    Attribute protection
+    - Args:
+        - *types(type, tuple): 信号参数类型, Signal parameter types.
+        - signal_scope(str): 信号作用域, Signal scope.
+            - `instance`(default): 实例信号, Instance signal. 
+            - `class`: 类信号, Class signal.
 
-    Args:
-        *types(type, tuple): 信号参数类型, Signal parameter types.
-        signal_scope(str): 信号作用域, Signal scope.
-            `instance`(default): 实例信号, Instance signal. 
-            `class`: 类信号, Class signal.
-
-    Methods:
-        connect: 连接信号槽, Connect signal slot.
-        disconnect: 断开信号槽, Disconnect signal slot.
-        emit: 发射信号, Emit signal.
+    - Methods:
+        - connect: 连接信号槽, Connect signal slot.
+        - disconnect: 断开信号槽, Disconnect signal slot.
+        - emit: 发射信号, Emit signal.
     """
 
     def __init__(self, *types: typing.Union[type, tuple], signal_scope: str = 'instance', async_exec: bool = False) -> None:

@@ -26,7 +26,8 @@ classifiers = [
 
 # 依赖管理
 dependencies = [
-    "wrapt"
+    "wrapt",
+    "psutil"
 ]
 
 # 可选依赖组 (pip install .[dev,docs])

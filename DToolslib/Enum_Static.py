@@ -49,6 +49,7 @@ class _itemBase:
 
 
 class _SEInteger(int, _itemBase):
+    __values__ = {}
     pass
 
 
@@ -118,8 +119,11 @@ class _StaticEnumDict(dict):
             raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
         if (type(value) in _analog_define_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
             # 默认所有 __名称__ 的属性都是类的重要属性, 不能被枚举项占用
+            # By default, all attributes with __name__ are important attributes of the class and cannot be occupied by enumeration items.
             value = _analog_define_dict[type(value)](value)
             value.name = key
+            if type(value) == _SEInteger:
+                _SEInteger.__values__[key] = value.value
         self._member_names[key] = value
         super().__setitem__(key, value)
 
@@ -176,6 +180,20 @@ class _StaticEnumMeta(type):
             cls.__members__['isAllowedSetValue'] = True
             cls.__members__['data'][key] = value
             setattr(cls, key, value)
+        enum_int_num = -1
+        for key, value in dct['__annotations__'].items():
+            if value == int:
+                while True:
+                    enum_int_num += 1
+                    if enum_int_num not in _SEInteger.__values__.values():
+                        _SEInteger.__values__[key] = enum_int_num
+                        item = _SEInteger(enum_int_num)
+                        item.name = key
+                        cls.__members__[key] = item
+                        setattr(cls, key, _SEInteger(enum_int_num))
+                        break
+            else:
+                raise ValueError('StaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.')
         if not hasattr(cls, '__allow_new_attr__') or not cls.__allow_new_attr__:
             _recursion_set_attr_lock(cls)
         cls.__members__['isAllowedSetValue'] = False
@@ -255,6 +273,8 @@ if __name__ == '__main__':
         A.color_name = 'Red'
         A.ansi_font = 31
         A.ansi_background = 41
+        B: int
+        C: int
 
     print(TestEnum.A)  # output: #ff0000
     print(TestEnum.A.name)  # output: A
@@ -263,4 +283,5 @@ if __name__ == '__main__':
     print(type(TestEnum.A))  # output: <class '__main__.SEString'>
     print('#ff0000' in TestEnum)  # output: True
     print(isinstance(TestEnum.A, str))  # output: True
+    print(TestEnum.B, TestEnum.C)  # output: 0 1
 """

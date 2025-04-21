@@ -618,12 +618,84 @@ class JFLogger(object):
     __log_folder_name_list__ = []
 
     @property
-    def log_dir(self):
+    def name(self) -> str:
+        return self.__log_name
+
+    @property
+    def root_dir(self) -> str:
+        return self.__root_dir
+
+    @property
+    def log_dir(self) -> str:
         return self.__log_dir
 
     @property
-    def name(self):
-        return self.__log_name
+    def current_log_file_path(self) -> str:
+        return self.__log_file_path
+
+    @property
+    def zip_file_path(self) -> str:
+        return self.__zip_file_path
+
+    @property
+    def enableConsoleOutput(self) -> bool:
+        return self.__enableConsoleOutput
+
+    @property
+    def enableFileOutput(self) -> bool:
+        return self.__enableFileOutput
+
+    @property
+    def enableDailySplit(self) -> bool:
+        return self.__enableDailySplit
+
+    @property
+    def enableRuntimeZip(self) -> bool:
+        return self.__enableRuntimeZip
+
+    @property
+    def isStrictLimit(self) -> bool:
+        return self.__isStrictLimit
+
+    @property
+    def enableQThreadtracking(self) -> bool:
+        return self.__enableQThreadtracking
+
+    @property
+    def log_level(self) -> int:
+        return self.__log_level
+
+    @property
+    def limit_single_file_size_Bytes(self) -> int:
+        return self.__limit_single_file_size_Bytes
+
+    @property
+    def limit_files_count(self) -> int:
+        return self.__limit_files_count
+
+    @property
+    def limit_files_days(self) -> int:
+        return self.__limit_files_days
+
+    @property
+    def message_format(self) -> str:
+        return self.__message_format
+
+    @property
+    def highlight_type(self) -> str:
+        return self.__highlight_type
+
+    @property
+    def exclude_functions(self) -> list:
+        return list(self.__exclude_funcs)
+
+    @property
+    def exclude_classes(self) -> list:
+        return list(self.__exclude_classes)
+
+    @property
+    def exclude_modules(self) -> list:
+        return list(self.__exclude_modules)
 
     def __new__(cls, log_name, *args, **kwargs):
         instance = super().__new__(cls)
@@ -717,7 +789,6 @@ class JFLogger(object):
         self.__isStrictLimit = False
         self.__hasWrittenFirstFile = False
         self.__isWriting = False
-        self.__self_class_name: str = self.__class__.__name__
         self.__self_module_name: str = os.path.splitext(os.path.basename(__file__))[0]
         self.__start_time_log = datetime.now()
         self.__zip_file_path = ''
@@ -744,7 +815,7 @@ class JFLogger(object):
         self.__exclude_funcs.update(self.__class__.__dict__.keys())
         self.__exclude_funcs.difference_update(dir(object))
         self.__exclude_classes: set = {
-            self.__self_class_name,
+            self.__class__.__name__,
             '_LoggingListener',
             '_LogSignal',
             '_BoundSignal',
@@ -1197,7 +1268,7 @@ class JFLogger(object):
             - classes_list(list[str]): A list of class names (as strings) to exclude.
         """
         self.__exclude_classes: set = {
-            self.__self_class_name,
+            self.__class__.__name__,
             '_LoggingListener',
             '_LogSignal',
             '_BoundSignal',
@@ -1505,6 +1576,7 @@ class JFLogger(object):
 class JFLoggerGroup(object):
     """
     This class is used to manage a group of loggers. It can collect the log message of all or some loggers and write them to a specific file.
+    It is singleton.
 
     - Args:
         - root_dir(str): The root directory of the log group.
@@ -1562,6 +1634,7 @@ class JFLoggerGroup(object):
     Then Log_gp can get the log information of Log and Log_2
     """
     __instance = None
+    __lock__ = threading.Lock()
     signal_all = _LogSignal(str)
     signal_all_color = _LogSignal(str)
     signal_all_console = _LogSignal(str)
@@ -1593,8 +1666,10 @@ class JFLoggerGroup(object):
 
     def __new__(cls, *args, **kwargs):
         if not cls.__instance:
-            cls.__instance = super().__new__(cls)
-            cls.__instance.__isInitialized = False
+            with cls.__lock__:
+                if not cls.__instance:
+                    cls.__instance = super().__new__(cls)
+                    cls.__instance.__isInitialized = False
         return cls.__instance
 
     def __init__(

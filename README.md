@@ -18,6 +18,8 @@ An enumeration library, supported
   保留原类型(None, Boolean 除外), 可以使用 `isinstance` 判断
 - It can be read directly, and there is no need to use its `value` property. Of course, it can also use `value`
   可以直接读取, 不需要使用其 `value` 属性, 当然也可以使用 `value`
+- For members of type int, if no value is specified, a unique value will be assigned automatically, starting from 0 and incrementing, avoiding conflicts with existing values in the library.
+  对于Int 类型, 如果没有指定值, 则自动赋值, 从 0 开始, 依次递增, 且不会与库中其他枚举值重复
 
 ###### How to use | 使用方法
 
@@ -28,6 +30,8 @@ class TestEnum(StaticEnum):
     A.color_name = 'Red'
     A.ansi_font = 31
     A.ansi_background = 41
+    B: int
+    C: int
 
 print(TestEnum.A)  # output: #ff0000
 print(TestEnum.A.name)  # output: A
@@ -36,6 +40,7 @@ print(TestEnum.A.ansi_font)  # output: 31
 print(type(TestEnum.A))  # output: <class '__main__.SEString'>
 print('#ff0000' in TestEnum)  # output: True
 print(isinstance(TestEnum.A, str))  # output: True
+print(TestEnum.B, TestEnum.C)  # output: 0 1
 ```
 
 ### EventSignal
@@ -144,21 +149,6 @@ Log.error('This is a error message.')
 Log_1.critical('This is a critical message.')
 ```
 
-### SingletonMeta
-
-Singleton pattern metaclass
-单例模式元类
-
-###### How to use | 使用方法
-
-```python
-class Test(metaclass=SingletonMeta):
-	...
-a = Test()
-b = Test()
-print(a is b) # output: True
-```
-
 ### Inner_Decorators
 
 Interior Decorators
@@ -174,7 +164,8 @@ Interior Decorators
                     获取调用树
 
 # 版本信息 Version Info
-
+#### v0.0.2.3
+* 增加信号的线程安全, 完善Logger的函数, 并更名为JFLogger, 以区分于logging的Logger, 修改注释为英文
 #### v0.0.2.1
 * 增加信号的异步执行, 但无线程锁, 不保证线程安全
 

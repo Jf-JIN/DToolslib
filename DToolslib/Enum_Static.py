@@ -161,6 +161,8 @@ class _StaticEnumMeta(type):
                 if isinstance(obj, _StaticEnumMeta):
                     _recursion_set_attr_lock(obj)
                     continue
+                if type(obj) not in _analog_define_dict:
+                    continue
                 setattr(obj, f'_{obj.__class__.__name__}__attr_lock', True)
 
         if len(bases) == 0:
@@ -180,20 +182,22 @@ class _StaticEnumMeta(type):
             cls.__members__['isAllowedSetValue'] = True
             cls.__members__['data'][key] = value
             setattr(cls, key, value)
+        # 处理未赋值枚举项
         enum_int_num = -1
-        for key, value in dct['__annotations__'].items():
-            if value == int:
-                while True:
-                    enum_int_num += 1
-                    if enum_int_num not in _SEInteger.__values__.values():
-                        _SEInteger.__values__[key] = enum_int_num
-                        item = _SEInteger(enum_int_num)
-                        item.name = key
-                        cls.__members__[key] = item
-                        setattr(cls, key, _SEInteger(enum_int_num))
-                        break
-            else:
-                raise ValueError('StaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.')
+        if '__annotations__' in dct:
+            for key, value in dct['__annotations__'].items():
+                if value == int:
+                    while True:
+                        enum_int_num += 1
+                        if enum_int_num not in _SEInteger.__values__.values():
+                            _SEInteger.__values__[key] = enum_int_num
+                            item = _SEInteger(enum_int_num)
+                            item.name = key
+                            cls.__members__[key] = item
+                            setattr(cls, key, _SEInteger(enum_int_num))
+                            break
+                else:
+                    raise ValueError('StaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.')
         if not hasattr(cls, '__allow_new_attr__') or not cls.__allow_new_attr__:
             _recursion_set_attr_lock(cls)
         cls.__members__['isAllowedSetValue'] = False
@@ -202,7 +206,7 @@ class _StaticEnumMeta(type):
     def __setattr__(cls, key, value):
         if key in cls.__members__['data'] and not cls.__members__['isAllowedSetValue']:
             ori = cls.__members__['data'][key]
-            raise TypeError(f'Modification of the member "{key.__qualname__}" in the "{cls.__name__}" enumeration is not allowed. < {key.__qualname__} > = {ori}')
+            raise TypeError(f'Modification of the member "{key}" in the "{cls.__name__}" enumeration is not allowed. < {key} > = {ori}')
         elif key not in cls.__members__ and not isinstance(value, type) and '__attr_lock' not in key and not cls.__members__['isAllowedSetValue']:
             raise TypeError(f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.')
         super().__setattr__(key, value)
@@ -266,7 +270,7 @@ class StaticEnum(metaclass=_StaticEnumMeta):
         raise AttributeError(f'Item {item} not found in {cls.__name__}')
 
 
-""" 
+"""
 if __name__ == '__main__':
     class TestEnum(StaticEnum):
         A = '#ff0000'
@@ -275,6 +279,7 @@ if __name__ == '__main__':
         A.ansi_background = 41
         B: int
         C: int
+        D = None
 
     print(TestEnum.A)  # output: #ff0000
     print(TestEnum.A.name)  # output: A

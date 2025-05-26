@@ -25,9 +25,9 @@ class _null:
 _null = _null()
 
 _object_attr = [
-    '__new__', '__repr__', '__hash__', '__str__', '__getattribute__', '__setattr__', '__delattr__', '__lt__', '__le__', '__eq__', '__ne__', '__gt__', '__ge__',
-    '__init__', '__reduce_ex__', '__reduce__', '__getstate__', '__subclasshook__', '__init_subclass__', '__format__', '__sizeof__', '__dir__', '__class__', '__doc__',
-    '__module__', '__qualname__', '__members__', 'isAllowedSetValue',
+    '__new__', '__repr__', '__call__', '__hash__', '__str__', '__getattribute__', '__setattr__', '__delattr__', '__lt__', '__le__', '__eq__', '__ne__', '__gt__', '__ge__',
+    '__init__', '__or__', '__ror__', 'mro', '__subclasses__', '__prepare__', '__instancecheck__', '__subclasscheck__', '__reduce_ex__', '__reduce__', '__getstate__', '__subclasshook__', '__init_subclass__', '__format__', '__sizeof__', '__basicsize__', '__dir__', '__class__', '__doc__', '__itemsize__', '__flags__', '__weakrefoffset__',
+    '__module__', '__qualname__', '__members__', '__base__', '__dictoffset__', '__mro__', '__name__', '__abstractmethods__', '__bases__', '__dict__', '__text_signature__', '__annotations__', '__isAllowedSetValue__', '__enable_member_attribute__', '__enable_member_extension__', '__int_enums__',
 ]
 
 
@@ -49,7 +49,6 @@ class _itemBase:
 
 
 class _SEInteger(int, _itemBase):
-    __values__ = {}
     pass
 
 
@@ -93,7 +92,7 @@ class _SEByteArray(bytes, _itemBase):
     pass
 
 
-_analog_define_dict = {
+_static_enum_dict = {
     int: _SEInteger,
     float: _SEFloat,
     str: _SEString,
@@ -109,47 +108,62 @@ _analog_define_dict = {
 
 
 class _StaticEnumDict(dict):
-    def __init__(self) -> None:
+    def __init__(self, enable_member_attribute: bool, enable_member_extension: bool) -> None:
         super().__init__()
         self._cls_name = None
-        self._member_names = {}
+        self._member_names: dict = {}
+        self._enable_member_attribute: bool = enable_member_attribute
+        self._enable_member_extension: bool = enable_member_extension
+        self._int_enums: dict = {}
+        self.__setitem__('__enable_member_attribute__', self._enable_member_attribute)
+        self.__setitem__('__enable_member_extension__', self._enable_member_extension)
+        self.__setitem__('__int_enums__', self._int_enums)
 
     def __setitem__(self, key: str, value) -> None:
         if key in self._member_names:
             raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
-        if (type(value) in _analog_define_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
+        # 替换枚举项的类型, 增加扩展性
+        if self._enable_member_attribute and (type(value) in _static_enum_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
             # 默认所有 __名称__ 的属性都是类的重要属性, 不能被枚举项占用
-            # By default, all attributes with __name__ are important attributes of the class and cannot be occupied by enumeration items.
-            value = _analog_define_dict[type(value)](value)
+            # 判断条件: 允许使用枚举项属性 && 类型属于常规数据类型 && 枚举项名称不在对象属性中 && 枚举项名称不是 __名称__ 形式
+            value = _static_enum_dict[type(value)](value)
             value.name = key
-            if type(value) == _SEInteger:
-                _SEInteger.__values__[key] = value.value
+        # 记录整数枚举项, 用于后续自动赋值整型枚举项
+        if type(value) == _SEInteger:
+            self._int_enums[key] = value.value
+        elif type(value) == int:
+            self._int_enums[key] = value
+        # 记录枚举项, 用于后续禁止重复定义
         self._member_names[key] = value
         super().__setitem__(key, value)
 
 
 class _StaticEnumMeta(type):
     @classmethod
-    def __prepare__(metacls, cls, bases, **kwds) -> _StaticEnumDict:
-        enum_dict = _StaticEnumDict()
+    def __prepare__(metacls, cls, bases, enable_member_attribute=False, enable_member_extension=False, *args, ** kwargs) -> _StaticEnumDict:
+        enum_dict = _StaticEnumDict(enable_member_attribute, enable_member_extension)
         enum_dict._cls_name = cls
         return enum_dict
 
-    def __new__(mcs, name, bases, dct: dict):
-        def _convert_to_enum_item(cls, key, value) -> None:
+    def __new__(mcs, name, bases, dct: dict, *args, **kwargs):
+        def _convert_to_enum_item(cls, key, value, enable_member_attribute, enable_member_extension, *args, **kwargs) -> None:
             cls_dict = dict(value.__dict__)
-            flag_allow_new_attr = False
+            cls_dict['__enable_member_attribute__'] = enable_member_attribute
+            cls_dict['__enable_member_extension__'] = enable_member_extension
+            cls_dict['__int_enums__'] = {}
+
             for sub_key, sub_value in cls_dict.items():
+                sub_key: str
+                sub_value: str
                 if isinstance(sub_value, type) and not issubclass(sub_value, StaticEnum) and sub_value is not value:
+                    # 条件: sub_value 是一个类 && 非 StaticEnum 子类 && 不是当前枚举类
+                    # 作用替换未显示继承 StaticEnum 的子类为 StaticEnum 子类
                     _convert_to_enum_item(sub_value, sub_key, sub_value)
-                if sub_key not in _object_attr and not (sub_key.startswith('__') and sub_key.endswith('__')) and type(sub_value) in _analog_define_dict:
-                    cls_dict[sub_key] = _analog_define_dict[type(sub_value)](sub_value)
+                if enable_member_attribute and sub_key not in _object_attr and not (sub_key.startswith('__') and sub_key.endswith('__')) and type(sub_value) in _static_enum_dict:
+                    # 条件: 允许使用枚举项属性 && 不是对象属性 && 不是魔术属性 && 子类型属于常规数据类型
+                    cls_dict[sub_key] = _static_enum_dict[type(sub_value)](sub_value)
                     cls_dict[sub_key].name = sub_key
-                    if hasattr(cls, '__allow_new_attr__') and cls.__allow_new_attr__:
-                        flag_allow_new_attr = True
-            if flag_allow_new_attr:
-                cls_dict['__allow_new_attr__'] = True
-            new_cls = type(
+            new_cls = _StaticEnumMeta(
                 value.__name__,
                 (StaticEnum,),
                 cls_dict
@@ -161,7 +175,7 @@ class _StaticEnumMeta(type):
                 if isinstance(obj, _StaticEnumMeta):
                     _recursion_set_attr_lock(obj)
                     continue
-                if type(obj) not in _analog_define_dict:
+                if type(obj) not in _static_enum_dict:
                     continue
                 setattr(obj, f'_{obj.__class__.__name__}__attr_lock', True)
 
@@ -171,13 +185,15 @@ class _StaticEnumMeta(type):
             'isAllowedSetValue': False,  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
             'data': {}  # 用于存储枚举项的值
         }
+
         members = {key: value for key, value in dct.items() if not key.startswith('__')}
         cls = super().__new__(mcs, name, bases, dct)
         for key, value in members.items():
             if key == 'isAllowedSetValue' or key == '__members__':
                 continue
             elif isinstance(value, type) and not issubclass(value, StaticEnum) and value is not cls:
-                _convert_to_enum_item(cls, key, value)
+                # 针对非StaticEnum子类的嵌套类, 做类转换处理
+                _convert_to_enum_item(cls, key, value, dct['__enable_member_attribute__'], dct['__enable_member_extension__'])
                 continue
             cls.__members__['isAllowedSetValue'] = True
             cls.__members__['data'][key] = value
@@ -189,16 +205,19 @@ class _StaticEnumMeta(type):
                 if value == int:
                     while True:
                         enum_int_num += 1
-                        if enum_int_num not in _SEInteger.__values__.values():
-                            _SEInteger.__values__[key] = enum_int_num
-                            item = _SEInteger(enum_int_num)
-                            item.name = key
+                        if enum_int_num not in cls.__int_enums__.values():
+                            cls.__int_enums__[key] = enum_int_num
+                            if cls.__enable_member_attribute__:
+                                item = _SEInteger(enum_int_num)
+                                item.name = key
+                            else:
+                                item: int = enum_int_num
                             cls.__members__[key] = item
-                            setattr(cls, key, _SEInteger(enum_int_num))
+                            setattr(cls, key, item)
                             break
                 else:
                     raise ValueError('StaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.')
-        if not hasattr(cls, '__allow_new_attr__') or not cls.__allow_new_attr__:
+        if cls.__enable_member_attribute__ and cls.__enable_member_extension__:
             _recursion_set_attr_lock(cls)
         cls.__members__['isAllowedSetValue'] = False
         return cls
@@ -218,37 +237,127 @@ class _StaticEnumMeta(type):
         return item in self.__members__['data'].values()
 
 
-class StaticEnum(metaclass=_StaticEnumMeta):
+class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=True, enable_member_extension=True):
     """
-    静态枚举类, 属性不可修改 Static enumeration class, attributes cannot be modified
+    StaticEnum is a static enumeration class with enhanced enum member capabilities,
+    implemented via the custom metaclass `_StaticEnumMeta`.
 
-    - 可以给枚举项添加属性, None和Boolean类型除外 You can add attributes to enumeration items except none and boolean types
-    - 可以遍历, 使用keys(), 使用values(), 使用items() You can traverse, use keys(), use values(), and use items()
+    Features:
+    - Enum members are immutable (static behavior).
+    - Unassigned `int`-typed declarations like `X: int` will be auto-assigned incrementing integer values starting from 0.
+    - Enum members can hold additional attributes (if `enable_member_attribute` is enabled).
+    - Members can be extended outside class definition (if `enable_member_extension` is enabled).
+    - Supports iteration and access via `keys()`, `values()`, `items()`.
+    - No type conversion is applied to magic attributes, `None`, or booleans — so they do not support extra attributes.
+    - Nested classes are automatically converted into StaticEnum subclasses.
 
-    如果枚举类含有__allow_new_attr__属性, 则允许枚举类外部给枚举项添加新的属性, 例如: 
-    If the enumeration class contains the __allow_new_attr__ attribute, it is allowed to add new attributes to enumeration items outside the enumeration class, for example:
+    Class-level Parameters (received by metaclass):
+    - enable_member_attribute: bool
+        Enable attribute binding on enum members. If True, allows `MyEnum.A.some_attr = 123`.
+        Also, each enum member automatically gets two built-in attributes: `name` and `value`,  
+        where `name` stores the member's identifier (e.g., `'A'`), and `value` stores its assigned value.
 
-    class MyEnum(StaticEnum):
-        __allow_new_attr__ = True
-        A = 1
-        B = 2
+    - enable_member_extension: bool
+        Allow enum members to be extended with attributes outside the class definition.
 
-    MyEnum.A.new_attr = 3 # No Error, else Error will occur.
+    Methods:
+    - cls.members() -> list[(key, value)]
+        Returns all enum members as a list of (key, value) pairs.
+
+    - cls.items() -> dict_items
+        Returns a view of all enum items (key-value pairs).
+
+    - cls.keys() -> dict_keys
+        Returns a view of all enum keys.
+
+    - cls.values() -> dict_values
+        Returns a view of all enum values.
+
+    - cls.getItemByValue(value) -> EnumMember
+        Find enum member by value; raise AttributeError if not found.
 
 
+    StaticEnum 是一种静态枚举类, 通过自定义元类 `_StaticEnumMeta` 实现了增强的枚举项功能. 
+
+    功能特性:
+    - 枚举项不可修改(保证静态性)
+    - 对未赋值的整型声明(如 `X: int`), 会自动为其分配递增整数值(从 0 开始)
+    - 支持枚举项添加属性(需启用 `enable_member_attribute`)
+    - 支持类定义外部扩展枚举项属性(需启用 `enable_member_extension`)
+    - 支持`遍历`、`keys()` / `values()` / `items()` 访问
+    - 不对魔术属性、None 和布尔值进行类型转换, 因此它们不支持绑定额外属性
+    - 嵌套类可自动转换为 StaticEnum 子枚举类
+
+
+    参数说明 (由元类接收):
+    - enable_member_attribute: bool  
+        是否启用为枚举项绑定属性的功能. 启用后, 可以通过 `MyEnum.A.some_attr = 123` 添加属性.
+        同时, 枚举项会自动获得两个内置属性: `name` 和 `value`,   
+        其中 `name` 保存变量名(如 `'A'`), `value` 保存枚举项的值(如 `MyEnum.A` 的实际值
+
+    - enable_member_extension: bool  
+        是否允许在类定义外部对枚举项添加新属性, 例如在运行时动态添加.   
+
+    提供的方法 Methods:
+    - cls.members() -> list[(key, value)]
+        获取所有枚举项组成的键值对列表
+
+    - cls.items() -> dict_items
+        返回所有枚举项的 (key, value) 可迭代视图
+
+    - cls.keys() -> dict_keys
+        返回所有枚举项的键集合
+
+    - cls.values() -> dict_values
+        返回所有枚举项的值集合
+
+    - cls.getItemByValue(value) -> EnumMember  
+        根据值查找对应的枚举成员, 否则抛出 AttributeError
+
+    用法示例 Example:
+        class TestEnum(StaticEnum, enable_member_attribute=True, enable_member_extension=True):
+            A = '#ff0000'
+            A.color_name = 'Red'
+            A.ansi_font = 31
+            A.ansi_background = 41
+            B: int
+            C: int
+            D = None
+
+            class TestEnum2(StaticEnum, enable_member_attribute=True):
+                AA = '#ff00ff'
+                BB = 1
+                CC = 2
+                DD: int
+                EE: int
+
+            class TestEnum3(StaticEnum):
+                AAA = '#00ff00'
+                BBB: int
+
+            class TestEnum4:
+                AAAA = '#0000ff'
+                BBBB: int
+
+        TestEnum.A.color_name = 'Rot'               # success 成功
+        TestEnum.A.font_family = 'Arial'            # success 成功
+        TestEnum.TestEnum2.AA.color_name = 'Pink'   # failed 失败, not allowed 行为禁止
+        TestEnum.TestEnum3.AAA.color_name = 'Green' # failed 失败, str has no attribute 'color_name' 字符串没有 color_name 属性
+        TestEnum.TestEnum4.AAAA.color_name = 'Blue' # failed 失败, str has no attribute 'color_name' 字符串没有 color_name 属性
     """
-    @classmethod
-    def members(cls) -> list:
-        temp = []
-        for key, value in cls.__members__['data'].items():
-            temp.append((key, value))
-        return temp
 
     def __hasattr__(self, item):
         return item in self.__members__['data'].keys()
 
     def __getattr__(self, item):
         return self.__members__['data'][item]
+
+    @classmethod
+    def members(cls) -> list:
+        temp = []
+        for key, value in cls.__members__['data'].items():
+            temp.append((key, value))
+        return temp
 
     @classmethod
     def items(cls):
@@ -263,16 +372,16 @@ class StaticEnum(metaclass=_StaticEnumMeta):
         return cls.__members__['data'].values()
 
     @classmethod
-    def getItem(cls, item):
+    def getItemByValue(cls, item):
         for key, value in cls.__members__['data'].items():
             if value == item:
                 return value
         raise AttributeError(f'Item {item} not found in {cls.__name__}')
 
 
-"""
+""" 
 if __name__ == '__main__':
-    class TestEnum(StaticEnum):
+    class TestEnum(StaticEnum, enable_member_attribute=True):
         A = '#ff0000'
         A.color_name = 'Red'
         A.ansi_font = 31
@@ -281,12 +390,25 @@ if __name__ == '__main__':
         C: int
         D = None
 
+        class TestEnum2(StaticEnum):
+            a = 1
+            b = 3
+            AA = '#ff00ff'
+            BB: int
+            CC: int
+
+        class TestEnum3:
+            AAA = '#00ff00'
+            BBB: int
+
     print(TestEnum.A)  # output: #ff0000
     print(TestEnum.A.name)  # output: A
     print(TestEnum.A.color_name)  # output: Red
     print(TestEnum.A.ansi_font)  # output: 31
-    print(type(TestEnum.A))  # output: <class '__main__.SEString'>
-    print('#ff0000' in TestEnum)  # output: True
+    print(type(TestEnum.A))  # output: <class '__main__._SEString'>
+    print(type(TestEnum.TestEnum2.AA))  # output: <class 'str'>
     print(isinstance(TestEnum.A, str))  # output: True
+    print('#ff0000' in TestEnum)  # output: True
     print(TestEnum.B, TestEnum.C)  # output: 0 1
+    print(TestEnum.TestEnum2.BB, TestEnum.TestEnum2.CC, TestEnum.TestEnum3.BBB)  # output: 0 2 0
 """

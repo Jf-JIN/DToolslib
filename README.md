@@ -24,23 +24,36 @@ An enumeration library, supported
 ###### How to use | 使用方法
 
 ```python
-class TestEnum(StaticEnum):
-    # __allow_new_attr__ = True  # Allow new attributes to be added outside the class | 允许类外部添加新属性
+class TestEnum(StaticEnum, enable_member_attribute=True):
     A = '#ff0000'
     A.color_name = 'Red'
     A.ansi_font = 31
     A.ansi_background = 41
     B: int
     C: int
+    D = None
+
+    class TestEnum2(StaticEnum):
+        a = 1
+        b = 3
+        AA = '#ff00ff'
+        BB: int
+        CC: int
+
+    class TestEnum3:
+        AAA = '#00ff00'
+        BBB: int
 
 print(TestEnum.A)  # output: #ff0000
 print(TestEnum.A.name)  # output: A
 print(TestEnum.A.color_name)  # output: Red
 print(TestEnum.A.ansi_font)  # output: 31
-print(type(TestEnum.A))  # output: <class '__main__.SEString'>
-print('#ff0000' in TestEnum)  # output: True
+print(type(TestEnum.A))  # output: <class '__main__._SEString'>
+print(type(TestEnum.TestEnum2.AA))  # output: <class 'str'>
 print(isinstance(TestEnum.A, str))  # output: True
+print('#ff0000' in TestEnum)  # output: True
 print(TestEnum.B, TestEnum.C)  # output: 0 1
+print(TestEnum.TestEnum2.BB, TestEnum.TestEnum2.CC, TestEnum.TestEnum3.BBB)  # output: 0 2 0
 ```
 
 ### EventSignal
@@ -164,6 +177,12 @@ Interior Decorators
                     获取调用树
 
 # 版本信息 Version Info
+#### v1.0.0.0
+* Refactored the StaticEnum class and added setting function
+        重构了 StaticEnum 类, 增加了设置功能
+* The class names Logger and LoggerGroup are deprecated and have been replaced with JFLogger and JFLoggerGroup, respectively.
+        弃用了 Logger 和 LoggerGroup 类名, 改为 JFLogger 和 JFLoggerGroup
+
 #### v0.0.2.3
 * 增加信号的线程安全, 完善Logger的函数, 并更名为JFLogger, 以区分于logging的Logger, 修改注释为英文
 #### v0.0.2.1

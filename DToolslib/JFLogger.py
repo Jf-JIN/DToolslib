@@ -177,7 +177,8 @@ class _ColorMap(_EnumBase):
         style_list.append(getattr(getattr(_ColorMap, txt_color), 'ANSI_TXT')) if txt_color in _ColorMap else ''  # 字体颜色
         style_list.append(getattr(getattr(_ColorMap, bg_color), 'ANSI_BG')) if bg_color in _ColorMap else ''  # 背景颜色
         style_str = ';'.join(item for item in style_list if item)
-        return f'\x1B[{style_str}m{text}\x1B[0m'
+        ct: str = f'\x1B[{style_str}m{text}\x1B[0m' if style_str else text
+        return ct
 
     @staticmethod
     def html_ct(
@@ -2054,9 +2055,9 @@ class JFLoggerGroup(object):
                 file_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 start_time = self.__start_time.strftime('%Y-%m-%d %H:%M:%S')
                 message = f"""{'#'*66}
-    # <start time> This Program is started at\t {start_time}.
-    # <file time> This log file is created at\t {file_time}.
-    {'#'*66}\n\n{message}"""
+# <start time> This Program is started at\t {start_time}.
+# <file time> This log file is created at\t {file_time}.
+{'#'*66}\n\n{message}"""
                 self.__current_size = len(message.encode('utf-8'))
                 self.__run_async_rotated_log_compression()
             if not os.path.exists(self.__root_dir):

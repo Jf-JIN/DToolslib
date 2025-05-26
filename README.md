@@ -177,7 +177,7 @@ Interior Decorators
 #### v0.0.1.6
 
 * Fixed the bug where the Logger would crash when writing to a file if the folder/file did not exist.
-        修复Logger写入文件时，文件夹/文件不存在时崩溃的Bug
+        修复Logger写入文件时, 文件夹/文件不存在时崩溃的Bug
 * Fixed the bug where the Logger would crash when sys.stdout was optimized to None.
         修复Logger中sys.stdout被优化时为None而导致崩溃的bug
 * Fixed the bug where LoggerGroup would automatically create a folder during initialization even if no file output was specified.

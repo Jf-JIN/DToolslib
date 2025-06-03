@@ -234,7 +234,7 @@ class _StaticEnumMeta(type):
         return iter(cls.__members__['data'].values())
 
     def __contains__(self, item) -> bool:
-        return item in self.__members__['data'].values()
+        return item in self.__members__['data'].keys()
 
 
 class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=True, enable_member_extension=True):

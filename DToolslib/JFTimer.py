@@ -4,46 +4,7 @@ import time
 import threading
 import traceback
 from DToolslib import EventSignal
-
-
-def _asni_ct(
-    text: str,
-    txt_color: Union[int, None] = None,
-    bg_color: Union[int, None] = None,
-    bold: bool = False,
-    dim: bool = False,
-    italic: bool = False,
-    underline: bool = False,
-    blink: bool = False,
-    *args, **kwargs
-) -> str:
-    """
-    Generates ANSI escape sequences for terminal control.
-
-    - Args:
-        - text (str): The text to be escaped.
-        - txt_color (int, optional): The text color. Defaults to None.
-        - bg_color (int, optional): The background color. Defaults to None.
-        - bold (bool, optional): Whether it is a bold color. Defaults to False.
-        - dim (bool, optional): Whether it is a dim color. Defaults to False.
-        - italic (bool, optional): Whether it is an italic color. Defaults to False.
-        - underline (bool, optional): Whether it is an underline color. Defaults to False.
-        - blink (bool, optional): Whether it is a blink color. Defaults to False.
-
-    - Returns:
-        - str: The escaped text.
-    """
-    style_list: list = []
-    style_list.append('1') if bold else ''  # 粗体
-    style_list.append('2') if dim else ''  # 暗色
-    style_list.append('3') if italic else ''  # 斜体
-    style_list.append('4') if underline else ''  # 下划线
-    style_list.append('5') if blink else ''  # 闪烁
-    style_list.append(str(txt_color)) if isinstance(txt_color, int) else ''  # 字体颜色
-    style_list.append(str(bg_color)) if isinstance(bg_color, int) else ''  # 背景颜色
-    style_str: str = ';'.join(item for item in style_list if item)
-    ct: str = f'\x1B[{style_str}m{text}\x1B[0m' if style_str else text
-    return ct
+from DToolslib.Color_Text import *
 
 
 class JFTimer(threading.Thread):
@@ -84,7 +45,7 @@ class JFTimer(threading.Thread):
         elif callback is None:
             pass
         else:
-            e_text = _asni_ct("callback must be callable or a list/tuple of callables", 31, bold=True)
+            e_text = ansi_color_text("callback must be callable or a list/tuple of callables", 31, bold=True)
             raise ValueError(e_text)
 
         if isinstance(on_error, (list, tuple)):
@@ -95,7 +56,7 @@ class JFTimer(threading.Thread):
         elif on_error is None:
             pass
         else:
-            e_text = _asni_ct("on_error must be callable or a list/tuple of callables", 31, bold=True)
+            e_text = ansi_color_text("on_error must be callable or a list/tuple of callables", 31, bold=True)
             raise ValueError(e_text)
 
         self.__isAlived: bool = True
@@ -151,7 +112,7 @@ class JFTimer(threading.Thread):
             interval: The interval for the timer.
         """
         if not isinstance(interval, (int, float)):
-            e_text = _asni_ct(f'interval must be int or float, but got {type(interval)}', 31)
+            e_text = ansi_color_text(f'interval must be int or float, but got {type(interval)}', 31)
             raise TypeError(e_text)
         isRunning: bool = not self.__stop_event.is_set()
         if isRunning and apply_immediately:
@@ -171,7 +132,7 @@ class JFTimer(threading.Thread):
             count: The number of times the timer should run. -1 means that it will run forever.
         """
         if not isinstance(count, int):
-            e_text = _asni_ct(f'count must be int, but got {type(count)}', 31)
+            e_text = ansi_color_text(f'count must be int, but got {type(count)}', 31)
             raise TypeError(e_text)
         with self.__attr_lock:
             self.__count = count
@@ -186,7 +147,7 @@ class JFTimer(threading.Thread):
             flag: Whether to execute the callback function before sleeping.
         """
         if not isinstance(flag, bool):
-            e_text = _asni_ct(f'flag must be bool, but got {type(flag)}', 31)
+            e_text = ansi_color_text(f'flag must be bool, but got {type(flag)}', 31)
             raise TypeError(e_text)
         isRunning: bool = not self.__stop_event.is_set()
         if isRunning:
@@ -218,7 +179,7 @@ class JFTimer(threading.Thread):
             d: Differential coefficient.
         """
         if not (isinstance(p, (int, float)) and isinstance(i, (int, float)) and isinstance(d, (int, float))):
-            e_text = _asni_ct(f'p, i, d must be int or float, but got {type(p)}, {type(i)}, {type(d)}', 31)
+            e_text = ansi_color_text(f'p, i, d must be int or float, but got {type(p)}, {type(i)}, {type(d)}', 31)
             raise TypeError(e_text)
         self.__kp = p
         self.__ki = i
@@ -238,7 +199,7 @@ class JFTimer(threading.Thread):
         elif callable(algorithm):
             self.__correction_algorithm: Callable[[float], float] = algorithm
         else:
-            e_text = _asni_ct(f'algorithm must be None or Callable, but got {type(algorithm)}', 31)
+            e_text = ansi_color_text(f'algorithm must be None or Callable, but got {type(algorithm)}', 31)
             raise TypeError(e_text)
         return self
 
@@ -272,23 +233,23 @@ class JFTimer(threading.Thread):
         if isinstance(interval, (float, int)):
             self.__interval = interval
         if self.__interval < 0:
-            e_text = _asni_ct(f"Interval must be greater than 0 or equal to 0, now it is {self.__interval}", 31)
+            e_text = ansi_color_text(f"Interval must be greater than 0 or equal to 0, now it is {self.__interval}", 31)
             raise ValueError(e_text)
         if self.timeout.slot_counts < 1:
-            e_text = _asni_ct("No Callback function or signal slots", 31)
+            e_text = ansi_color_text("No Callback function or signal slots", 31)
             raise ValueError(e_text)
         if not self.is_alive() and self.__isAlived:
             self.__stop_event.set()
             self.__sleep_event.clear()
             super().start()
         elif not self.is_alive() and not self.__isAlived:
-            e_text = _asni_ct("Timer is already terminated", 31, bold=True)
+            e_text = ansi_color_text("Timer is already terminated", 31, bold=True)
             raise RuntimeError(e_text)
         elif self.is_alive() and not self.__stop_event.is_set():
             self.__stop_event.set()
             self.__sleep_event.clear()
         else:
-            print(_asni_ct("Timer is already started", 93))
+            print(ansi_color_text("Timer is already started", 93))
 
     def stop(self) -> None:
         """
@@ -314,14 +275,14 @@ class JFTimer(threading.Thread):
 
     def __calculate_sleep_time(self, target_cycle_time: float, exec_duration: float) -> float:
         if target_cycle_time < 0:
-            raise ValueError(_asni_ct("target_cycle_time must be greater than 0 or equal to 0"), 31)
+            raise ValueError(ansi_color_text("target_cycle_time must be greater than 0 or equal to 0"), 31)
         elif target_cycle_time == 0:
             return 0
         sleep_time: float = target_cycle_time - exec_duration
         if sleep_time > 0:
             pass
         else:
-            print(_asni_ct(f"Timer <{self.__name}> is running late by {-sleep_time} seconds", 93, italic=True))
+            print(ansi_color_text(f"Timer <{self.__name}> is running late by {-sleep_time} seconds", 93, italic=True))
             if self.__isAlived and self.__interval > 0:
                 raw_sleep_time: float = target_cycle_time - exec_duration % target_cycle_time
                 sleep_time = raw_sleep_time - self.__time_adjust
@@ -330,10 +291,10 @@ class JFTimer(threading.Thread):
             elif self.__isAlived and self.__interval == 0:
                 sleep_time = 1
             elif not self.__isAlived and self.__interval < 0:
-                e_text = _asni_ct(f"Timer interval can't be negative, now interval is {self.__interval}", 31, bold=True)
+                e_text = ansi_color_text(f"Timer interval can't be negative, now interval is {self.__interval}", 31, bold=True)
                 raise ValueError(e_text)
             else:
-                e_text = _asni_ct("Timer is not alive, please start the Timer first", 32, bold=True)
+                e_text = ansi_color_text("Timer is not alive, please start the Timer first", 32, bold=True)
                 raise ValueError(e_text)
         return sleep_time
 
@@ -350,16 +311,16 @@ class JFTimer(threading.Thread):
         ki_part: float = self.__ki * self.__integral_deviation
         kd_part: float = self.__kd * deviation_diff
         para: float = kp_part + ki_part + kd_part
-        # test_text: str = _asni_ct('kp', 31) + ':' + _asni_ct(self.__kp, 32) + '\t' + _asni_ct('ki', 31) + ':' + _asni_ct(self.__ki, 32) + '\t' + _asni_ct('kd', 31) + ':' + _asni_ct(self.__kd, 32) + '\n' + \
-        #     _asni_ct('p', 36) + ':' + _asni_ct(kp_part, 32) + '\t' + _asni_ct('i', 36) + ':' + _asni_ct(ki_part, 32) + '\t' + _asni_ct('d', 36) + ':' + _asni_ct(kd_part, 32) + '\t' + _asni_ct('para', 36) + ':' + _asni_ct(para, 32) + '\n' + \
-        #     _asni_ct('error', 33) + ':' + _asni_ct(current_deviation, 32) + '\t' + _asni_ct('error_diff', 33) + ':' + \
-        #     _asni_ct(deviation_diff, 32) + '\t' + _asni_ct('integral_error', 33) + ':' + _asni_ct(self.__integral_deviation, 32)
+        # test_text: str = ansi_color_text('kp', 31) + ':' + ansi_color_text(self.__kp, 32) + '\t' + ansi_color_text('ki', 31) + ':' + ansi_color_text(self.__ki, 32) + '\t' + ansi_color_text('kd', 31) + ':' + ansi_color_text(self.__kd, 32) + '\n' + \
+        #     ansi_color_text('p', 36) + ':' + ansi_color_text(kp_part, 32) + '\t' + ansi_color_text('i', 36) + ':' + ansi_color_text(ki_part, 32) + '\t' + ansi_color_text('d', 36) + ':' + ansi_color_text(kd_part, 32) + '\t' + ansi_color_text('para', 36) + ':' + ansi_color_text(para, 32) + '\n' + \
+        #     ansi_color_text('error', 33) + ':' + ansi_color_text(current_deviation, 32) + '\t' + ansi_color_text('error_diff', 33) + ':' + \
+        #     ansi_color_text(deviation_diff, 32) + '\t' + ansi_color_text('integral_error', 33) + ':' + ansi_color_text(self.__integral_deviation, 32)
         # print(test_text)
         return para
 
     def __repr__(self) -> str:
         if not self.__isAlived:
-            return f"<JFTimer <" + _asni_ct(self.__name, 93) + "> has been " + _asni_ct('terminated', 31, bold=True) + " (initialize required)>"
+            return f"<JFTimer <" + ansi_color_text(self.__name, 93) + "> has been " + ansi_color_text('terminated', 31, bold=True) + " (initialize required)>"
         else:
             return super().__repr__()
 
@@ -376,7 +337,7 @@ class JFTimer(threading.Thread):
             self.timeout.emit()
         except Exception as e:
             traceback_str = traceback.format_exc()
-            print(_asni_ct(f'Timer <{self.__name}> error: {traceback_str}', 31))
+            print(ansi_color_text(f'Timer <{self.__name}> error: {traceback_str}', 31))
             self.__handle_error(error=e, traceback=traceback_str)
         self.__sleep_event.wait(timeout=interval)
 
@@ -385,7 +346,7 @@ class JFTimer(threading.Thread):
             self.timeout.emit()
         except Exception as e:
             traceback_str = traceback.format_exc()
-            print(_asni_ct(f'Timer <{self.__name}> error: {traceback_str}', 31))
+            print(ansi_color_text(f'Timer <{self.__name}> error: {traceback_str}', 31))
             self.__handle_error(error=e, traceback=traceback_str)
 
     def __run_execution_before_sleep(self, interval: float) -> None:
@@ -406,7 +367,7 @@ class JFTimer(threading.Thread):
             current_diff: float = time.perf_counter() - start_time - interval
             self.__time_adjust: float = self.__correction_algorithm(current_diff)
             if not isinstance(self.__time_adjust, (float, int)):
-                e_text: str = _asni_ct(f'correction_algorithm must return a float, but got {type(self.__time_adjust)}', 31)
+                e_text: str = ansi_color_text(f'correction_algorithm must return a float, but got {type(self.__time_adjust)}', 31)
                 raise ValueError(e_text)
 
     def __run_execution_after_sleep(self, interval: float):
@@ -429,5 +390,5 @@ class JFTimer(threading.Thread):
             current_diff: float = time.perf_counter() - start_time - interval
             self.__time_adjust: float = self.__correction_algorithm(current_diff)
             if not isinstance(self.__time_adjust, (float, int)):
-                e_text: str = _asni_ct(f'correction_algorithm must return a float, but got {type(self.__time_adjust)}', 31)
+                e_text: str = ansi_color_text(f'correction_algorithm must return a float, but got {type(self.__time_adjust)}', 31)
                 raise ValueError(e_text)

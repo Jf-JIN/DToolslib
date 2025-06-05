@@ -8,6 +8,8 @@
     - `int`, `float`, `str`, `list`, `tuple`, `set`, `frozenset`, `dict`, `complex`, `bytes`, `bytearray`
 """
 __all__ = ['StaticEnum']
+import typing
+from .Color_Text import ansi_color_text
 
 
 class _null:
@@ -229,6 +231,20 @@ class _StaticEnumMeta(type):
         elif key not in cls.__members__ and not isinstance(value, type) and '__attr_lock' not in key and not cls.__members__['isAllowedSetValue']:
             raise TypeError(f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.')
         super().__setattr__(key, value)
+
+    def __repr__(cls):
+        items = list(cls.__members__['data'].items())
+        header = f"\n<StaticEnum> '{cls.__module__}.{cls.__name__}'"
+        lines = [ansi_color_text(header, txt_color=33)]
+        for i, (k, v) in enumerate(items):
+            index = ansi_color_text(i, txt_color=32)
+            type_t = ansi_color_text(type(v).__name__, txt_color=34)
+            key = ansi_color_text(k, txt_color=36, bold=True)
+            if isinstance(v, str):
+                v = "'" + v + "'"
+            value = ansi_color_text(v, txt_color=36, italic=True)
+            lines.append(f"{index:<5} | {type_t:<15} | {key:<30} | {value}")
+        return "\n".join(lines) + '\n'
 
     def __iter__(cls):
         return iter(cls.__members__['data'].values())

@@ -23,6 +23,25 @@ def ansi_color_text(
 
     - Returns:
         - str: The escaped text.
+
+    - Recommands:
+        - `BLACK` - `30` - `40`
+        - `RED` - `31` - `41`
+        - `GREEN` - `32` - `42`
+        - `YELLOW` - `33` - `43`
+        - `BLUE` - `34` - `44`
+        - `PINK` - `35` - `45`
+        - `CYAN` - `36` - `46`
+        - `WHITE` - `37` - `47`
+        - `GRAY` - `90` - `100`
+        - `LIGHTRED` - `91` - `101`
+        - `LIGHTGREEN` - `92` - `102`
+        - `LIGHTYELLOW` - `93` - `103`
+        - `LIGHTBLUE` - `94` - `104`
+        - `LIGHTPINK` - `95` - `105`
+        - `LIGHTCYAN` - `96` - `106`
+        - `LIGHTWHITE` - `97` - `107`
+
     """
     style_list: list = []
     style_list.append('1') if bold else ''  # 粗体
@@ -62,6 +81,25 @@ def html_color_text(
 
     - Returns:
         - str: The HTML color tag for the given text and style options.
+
+
+    - Recommands:
+        - `BLACK` - `#010101`
+        - `RED` - `#DE382B`
+        - `GREEN` - `#39B54A`
+        - `YELLOW` - `#FFC706`
+        - `BLUE` - `#006FB8`
+        - `PINK` - `#762671`
+        - `CYAN` - `#2CB5E9`
+        - `WHITE` - `#CCCCCC`
+        - `GRAY` - `#808080`
+        - `LIGHTRED` - `#FF0000`
+        - `LIGHTGREEN` - `#00FF00`
+        - `LIGHTYELLOW` - `#FFFF00`
+        - `LIGHTBLUE` - `#0000FF`
+        - `LIGHTPINK` - `#FF00FF`
+        - `LIGHTCYAN` - `#00FFFF`
+        - `LIGHTWHITE` - `#FFFFFF`
     """
     style_list: list = []
     style_list.append('color: ' + txt_color) if txt_color else ''

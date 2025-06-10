@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "DToolslib"
-version = "2.0.4.0"
+version = "2.0.4.1"
 description = "A simple and miscellaneous utility library containing multiple utility scripts. 一个简单且杂的工具库, 包含多个工具脚本"
 authors = [{ name = "Jf-JIN" }]
 readme = "README.md"

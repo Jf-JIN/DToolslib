@@ -50,7 +50,10 @@ class BoundSignal:
     """
 
     def __init__(self, name, *types, async_exec=False, use_priority=False, context=None) -> None:
-        if all([isinstance(typ, (type, tuple, typing.TypeVar, str, typing.Any)) for typ in types]):
+        print(types)
+        if ... in types:
+            self.__types = ...
+        elif all([isinstance(typ, (type, tuple, typing.TypeVar, str, typing.Any)) for typ in types]):
             self.__types = types
         else:
             error_text = f'Invalid type {types} for signal {name}'
@@ -295,14 +298,15 @@ class BoundSignal:
             error_text = 'Timeout must be a float or int or None'
             raise TypeError(error_text)
         with self.__thread_lock:
-            required_types = self.__types
-            required_types_count = len(self.__types)
-            args_count = len(args)
-            if required_types_count != args_count:
-                error_text = f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.'
-                raise TypeError(error_text)
-            for arg, (idx, required_type) in zip(args, enumerate(required_types)):
-                self.__check_type(arg, required_type, idx)
+            if self.__types != ...:
+                required_types = self.__types
+                required_types_count = len(self.__types)
+                args_count = len(args)
+                if required_types_count != args_count:
+                    error_text = f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.'
+                    raise TypeError(error_text)
+                for arg, (idx, required_type) in zip(args, enumerate(required_types)):
+                    self.__check_type(arg, required_type, idx)
             slots = self.__slots
             done_events = []
             for slot in slots:

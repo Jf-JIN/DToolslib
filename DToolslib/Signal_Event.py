@@ -164,12 +164,15 @@ class BoundSignal:
         return self
 
     def __check_type(self, arg, required_type, idx, path=[]) -> None:
+        """ 
+        此处检查如果出现问题, 则直接抛出错误, 故不需要返回任何值
+        """
         if path is None:
             path = []
         full_path = path + [idx+1]
         path_text = '-'.join(str(i) for i in full_path)
 
-        if isinstance(required_type, typing.TypeVar):
+        if isinstance(required_type, (typing.TypeVar, str)):
             return
 
         elif isinstance(required_type, tuple):

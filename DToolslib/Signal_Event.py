@@ -68,7 +68,7 @@ class BoundSignal:
             self.__thread_async_thread = threading.Thread(target=self.__process_queue, name=f'EventSignal_AsyncThread_{self.__name}', daemon=True)
             self.__thread_async_thread.start()
 
-    def __process_queue(self):
+    def __process_queue(self) -> None:
         while True:
             params: tuple = self.__queue_slot.get()
             slot: typing.Callable = params[0]
@@ -91,7 +91,7 @@ class BoundSignal:
         k, v = item
         return k if k >= 0 else self.__len_slots_with_priority + self.__len_slots_without_priority + k
 
-    def __priority_connect(self, slot: typing.Union['EventSignal', 'BoundSignal ', typing.Callable], priority: int):
+    def __priority_connect(self, slot: typing.Union['EventSignal', 'BoundSignal ', typing.Callable], priority: int) -> None:
         """ 
         该函数请务必在self.__thread_lock下使用, 以避免线程安全问题
         """
@@ -122,7 +122,7 @@ class BoundSignal:
                 slot = temp[idx]
             self.__slots.append(slot)
 
-    def __priority_disconnect(self, slot: typing.Union['EventSignal', typing.Callable]):
+    def __priority_disconnect(self, slot: typing.Union['EventSignal', typing.Callable]) -> None:
         """ 
         该函数请务必在self.__thread_lock下使用, 以避免线程安全问题.
 
@@ -135,6 +135,15 @@ class BoundSignal:
                     break
         elif slot in self.__slots_without_priority:
             self.__slots_without_priority.remove(slot)
+
+    def __priority_disconnect_all(self) -> None:
+        """ 
+        该函数请务必在self.__thread_lock下使用, 以避免线程安全问题.
+
+        该函数运行前提是 self.__slots中存在slot, 故无需检查
+        """
+        self.__slots_with_priority.clear()
+        self.__slots_without_priority.clear()
 
     def __str__(self) -> str:
         return f'<Signal BoundSignal(slots:{len(self.__slots)}) {self.__name} at 0x{id(self):016X}>'
@@ -216,6 +225,13 @@ class BoundSignal:
             else:
                 error_text = 'Slot must be callable'
                 raise ValueError(error_text)
+            return self
+
+    def disconnect_all(self) -> typing.Self:
+        with self.__thread_lock:
+            self.__slots.clear()
+            if self.__use_priority:
+                self.__priority_disconnect_all()
             return self
 
     def replace(self, old_slot: typing.Union['EventSignal', typing.Callable], new_slot: typing.Union['EventSignal', typing.Callable]) -> typing.Self:

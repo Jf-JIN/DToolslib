@@ -1,6 +1,6 @@
 from .Inner_Decorators import *
 from .Enum_Static import StaticEnum
-from .Signal_Event import EventSignal
+from .Signal_Event import EventSignal, BoundSignal
 from ._JFLogger import JFLogger, JFLoggerGroup, Logger, LoggerGroup, LogLevel, LogHighlightType
 from .JFTimer import JFTimer
 
@@ -12,6 +12,7 @@ __all__ = [
     'LogLevel',
     'LogHighlightType',
     'EventSignal',
+    'BoundSignal',
     'StaticEnum',
     'JFTimer',
     'Inner_Decorators',

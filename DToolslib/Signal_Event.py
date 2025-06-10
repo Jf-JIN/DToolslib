@@ -49,8 +49,8 @@ class BoundSignal:
         如需属性保护或类级使用，请使用 EventSignal 类。
     """
 
-    def __init__(self, name, *types, async_exec=False, use_priority=False) -> None:
-        if all([isinstance(typ, (type, tuple, typing.TypeVar, str)) for typ in types]):
+    def __init__(self, name, *types, async_exec=False, use_priority=False, context=None) -> None:
+        if all([isinstance(typ, (type, tuple, typing.TypeVar, str, typing.Any)) for typ in types]):
             self.__types = types
         else:
             error_text = f'Invalid type {types} for signal {name}'
@@ -58,6 +58,7 @@ class BoundSignal:
         self.__name = name
         self.__async_exec: bool = True if async_exec else False
         self.__use_priority: bool = True if use_priority else False
+        self.__context: None | dict = context
         self.__queue_slot = queue.Queue()
         self.__thread_lock = threading.Lock()
         self.__slots = []
@@ -175,14 +176,24 @@ class BoundSignal:
         full_path = path + [idx+1]
         path_text = '-'.join(str(i) for i in full_path)
 
-        if isinstance(required_type, typing.TypeVar):
+        if isinstance(required_type, typing.TypeVar) or required_type == typing.Any:
             return
 
         # 支持字符串形式的类名（'AClass'）
         elif isinstance(required_type, str):
-            error_text = f'EventSignal "{self.__name}" {path_text}th argument: Input type is a string "{required_type}". EventSignal does not parse type names from strings. Please ensure the argument types are passed as actual types, not string names.'
-            print(ansi_color_text(error_text, 33))
-            return
+            if self.__context:
+                required_type = self.__context.get(required_type, None)
+                if required_type is not None and isinstance(arg, required_type):
+                    return
+                else:
+                    required_name = getattr(required_type, '__name__', str(required_type))
+                    actual_name = type(arg).__name__
+                    error_text = f'EventSignal "{self.__name}" {path_text}th argument requires "{required_name}", got "{actual_name}"'
+                    raise TypeError(error_text)
+            else:
+                error_text = f'EventSignal "{self.__name}" is missing a context parameter. String types({path_text}th argument "{required_type}") will not be parsed automatically. Please verify the argument types manually.'
+                print(ansi_color_text(error_text, 33))
+                return
 
         elif isinstance(required_type, tuple):
             if not isinstance(arg, (tuple, list)):
@@ -323,8 +334,8 @@ class _BoundSignal(BoundSignal):
     __name__: str = 'EventSignal'
     __qualname__: str = 'EventSignal'
 
-    def __init__(self, types, owner, name, isClassSignal=False, async_exec=False, use_priority=False) -> None:
-        super().__init__(name, *types, async_exec=async_exec, use_priority=use_priority)
+    def __init__(self, types, owner, name, isClassSignal=False, async_exec=False, use_priority=False, context=None) -> None:
+        super().__init__(name, *types, async_exec=async_exec, use_priority=use_priority, context=context)
         self.__owner = owner
         self.__isClassSignal = isClassSignal
 
@@ -389,10 +400,12 @@ class EventSignal:
         if instance is None:
             return self
         else:
+            module = sys.modules[instance_type.__module__]
+            module_globals = module.__dict__
             if self.__scope == 'class':
-                return self.__handle_class_signal(instance_type)
+                return self.__handle_class_signal(instance_type, module_globals)
             else:
-                return self.__handle_instance_signal(instance)
+                return self.__handle_instance_signal(instance, module_globals)
 
     def __set__(self, instance, value) -> None:
         if value is self.__get__(instance, type(instance)):
@@ -403,7 +416,7 @@ class EventSignal:
     def __set_name__(self, instance, name) -> None:
         self.__name = name
 
-    def __handle_class_signal(self, instance_type) -> _BoundSignal:
+    def __handle_class_signal(self, instance_type, context) -> _BoundSignal:
         if not hasattr(instance_type, '__class_signals__'):
             instance_type.__class_signals__ = {}
         if self not in instance_type.__class_signals__:
@@ -412,11 +425,12 @@ class EventSignal:
                 instance_type,
                 self.__name,
                 isClassSignal=True,
-                async_exec=self.__async_exec
+                async_exec=self.__async_exec,
+                context=context,
             )
         return instance_type.__class_signals__[self]
 
-    def __handle_instance_signal(self, instance) -> _BoundSignal:
+    def __handle_instance_signal(self, instance, context) -> _BoundSignal:
         if not hasattr(instance, '__signals__'):
             instance.__signals__ = {}
         if self not in instance.__signals__:
@@ -425,7 +439,8 @@ class EventSignal:
                 instance,
                 self.__name,
                 isClassSignal=False,
-                async_exec=self.__async_exec
+                async_exec=self.__async_exec,
+                context=context,
             )
         return instance.__signals__[self]
 

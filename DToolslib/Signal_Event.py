@@ -3,15 +3,18 @@ import typing
 import threading
 import queue
 import time
+import builtins
+import sys
+from DToolslib.Color_Text import *
 
 
 class BoundSignal:
-    """ 
-    BoundSignal: A thread-safe, optionally asynchronous event signal system.  
+    """
+    BoundSignal: A thread-safe, optionally asynchronous event signal system.
     事件信号系统，支持线程安全与可选的异步执行。
 
-    Supports attribute protection, signal-slot connections, optional slot priorities,  
-    and safe asynchronous operations across threads.  
+    Supports attribute protection, signal-slot connections, optional slot priorities,
+    and safe asynchronous operations across threads.
     支持属性保护、信号与槽连接、可选的槽函数优先级，以及跨线程的安全异步操作。
 
     - Args:
@@ -21,20 +24,20 @@ class BoundSignal:
         - use_priority (bool): Whether to call slots in priority order. 是否按优先级调用槽函数。
 
     - Methods:
-        - connect(slot, priority=None):  
-            Connect a slot (callable) to the signal. Optionally specify priority.  
+        - connect(slot, priority=None):
+            Connect a slot (callable) to the signal. Optionally specify priority.
             连接槽函数，可选指定优先级。
 
-        - disconnect(slot):  
-            Disconnect a slot from the signal.  
+        - disconnect(slot):
+            Disconnect a slot from the signal.
             断开已连接的槽函数。
 
-        - emit(*args, blocking=False, timeout=None, **kwargs):  
-            Emit the signal with arguments. If async, can block with timeout.  
+        - emit(*args, blocking=False, timeout=None, **kwargs):
+            Emit the signal with arguments. If async, can block with timeout.
             发射信号；若为异步发射，可设置阻塞和超时。
 
-        - replace(old_slot, new_slot):  
-            Replace a connected slot with a new one.  
+        - replace(old_slot, new_slot):
+            Replace a connected slot with a new one.
             替换已连接的槽函数。
 
     - Operator Overloads:
@@ -42,12 +45,12 @@ class BoundSignal:
         - `-=`: Same as disconnect(). 等同于 disconnect()
 
     - Note:
-        For attribute protection or class-level usage, use EventSignal.  
+        For attribute protection or class-level usage, use EventSignal.
         如需属性保护或类级使用，请使用 EventSignal 类。
     """
 
     def __init__(self, name, *types, async_exec=False, use_priority=False) -> None:
-        if all([isinstance(typ, (type, tuple, typing.TypeVar)) for typ in types]):
+        if all([isinstance(typ, (type, tuple, typing.TypeVar, str)) for typ in types]):
             self.__types = types
         else:
             error_text = f'Invalid type {types} for signal {name}'
@@ -85,14 +88,14 @@ class BoundSignal:
                 self.__queue_slot.task_done()
 
     def __key_rule_for_sort_slots(self, item: tuple):
-        """ 
+        """
         该函数请务必在self.__thread_lock下使用, 以避免线程安全问题
         """
         k, v = item
         return k if k >= 0 else self.__len_slots_with_priority + self.__len_slots_without_priority + k
 
     def __priority_connect(self, slot: typing.Union['EventSignal', 'BoundSignal ', typing.Callable], priority: int) -> None:
-        """ 
+        """
         该函数请务必在self.__thread_lock下使用, 以避免线程安全问题
         """
         if priority is None:
@@ -123,7 +126,7 @@ class BoundSignal:
             self.__slots.append(slot)
 
     def __priority_disconnect(self, slot: typing.Union['EventSignal', typing.Callable]) -> None:
-        """ 
+        """
         该函数请务必在self.__thread_lock下使用, 以避免线程安全问题.
 
         该函数运行前提是 self.__slots中存在slot, 故无需检查
@@ -137,7 +140,7 @@ class BoundSignal:
             self.__slots_without_priority.remove(slot)
 
     def __priority_disconnect_all(self) -> None:
-        """ 
+        """
         该函数请务必在self.__thread_lock下使用, 以避免线程安全问题.
 
         该函数运行前提是 self.__slots中存在slot, 故无需检查
@@ -164,7 +167,7 @@ class BoundSignal:
         return self
 
     def __check_type(self, arg, required_type, idx, path=[]) -> None:
-        """ 
+        """
         此处检查如果出现问题, 则直接抛出错误, 故不需要返回任何值
         """
         if path is None:
@@ -172,7 +175,13 @@ class BoundSignal:
         full_path = path + [idx+1]
         path_text = '-'.join(str(i) for i in full_path)
 
-        if isinstance(required_type, (typing.TypeVar, str)):
+        if isinstance(required_type, typing.TypeVar):
+            return
+
+        # 支持字符串形式的类名（'AClass'）
+        elif isinstance(required_type, str):
+            error_text = f'EventSignal "{self.__name}" {path_text}th argument: Got type name as string "{required_type}". EventSignal does not resolve string type names automatically. Please pass actual type objects instead.'
+            print(ansi_color_text(error_text, 33))
             return
 
         elif isinstance(required_type, tuple):
@@ -187,6 +196,9 @@ class BoundSignal:
             return
 
         if not isinstance(arg, required_type):
+            if type(arg).__name__ == required_type.__name__:
+                return
+            print(arg, required_type, isinstance(arg, required_type), type(arg) == required_type, type(arg), type(required_type))
             required_name = getattr(required_type, '__name__', str(required_type))
             actual_name = type(arg).__name__
             error_text = f'EventSignal "{self.__name}" {path_text}th argument requires "{required_name}", got "{actual_name}" instead.'
@@ -330,7 +342,7 @@ class _BoundSignal(BoundSignal):
 
 class EventSignal:
     """
-    EventSignal: Event signal with attribute protection, asynchronous operation, and thread safety.  
+    EventSignal: Event signal with attribute protection, asynchronous operation, and thread safety.
     事件信号，支持属性保护、异步操作，同时线程安全。
 
     - Args:
@@ -342,20 +354,20 @@ class EventSignal:
         - use_priority (bool): Whether to call slots in priority order. 是否按优先级调用槽函数。
 
     - Methods:
-        - connect(slot, priority=None):  
-            Connect a slot (callable) to the signal. Optionally specify priority.  
+        - connect(slot, priority=None):
+            Connect a slot (callable) to the signal. Optionally specify priority.
             连接槽函数，可选指定优先级。
 
-        - disconnect(slot):  
-            Disconnect a slot from the signal.  
+        - disconnect(slot):
+            Disconnect a slot from the signal.
             断开已连接的槽函数。
 
-        - emit(*args, blocking=False, timeout=None, **kwargs):  
-            Emit the signal with arguments. If async, can block with timeout.  
+        - emit(*args, blocking=False, timeout=None, **kwargs):
+            Emit the signal with arguments. If async, can block with timeout.
             发射信号；若为异步发射，可设置阻塞和超时。
 
-        - replace(old_slot, new_slot):  
-            Replace a connected slot with a new one.  
+        - replace(old_slot, new_slot):
+            Replace a connected slot with a new one.
             替换已连接的槽函数。
 
     - Operator Overloads:
@@ -363,8 +375,8 @@ class EventSignal:
         - `-=`: Equivalent to disconnect(). 等同于 disconnect()。
 
     - Note:
-        Define in class body only. Supports instance-level and class-level signals  
-        depending on the 'signal_scope' argument.  
+        Define in class body only. Supports instance-level and class-level signals
+        depending on the 'signal_scope' argument.
         仅可在类体中定义。通过参数 signal_scope 可定义为实例信号或类信号。
     """
 
@@ -421,7 +433,7 @@ class EventSignal:
         print(content)
 
 
-""" 
+"""
 if __name__ == '__main__':
     class Test:
         signal_instance_a = EventSignal(str)                        # Instance Signal

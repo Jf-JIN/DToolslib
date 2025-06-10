@@ -180,7 +180,7 @@ class BoundSignal:
 
         # 支持字符串形式的类名（'AClass'）
         elif isinstance(required_type, str):
-            error_text = f'EventSignal "{self.__name}" {path_text}th argument: Got type name as string "{required_type}". EventSignal does not resolve string type names automatically. Please pass actual type objects instead.'
+            error_text = f'EventSignal "{self.__name}" {path_text}th argument: Input type is a string "{required_type}". EventSignal does not parse type names from strings. Please ensure the argument types are passed as actual types, not string names.'
             print(ansi_color_text(error_text, 33))
             return
 

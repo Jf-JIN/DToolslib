@@ -77,6 +77,28 @@ class JFLogger(object):
             - level_str(str): `LogLevel.TRACE`, `LogLevel.DEBUG`, `LogLevel.INFO`, `LogLevel.WARNING`, `LogLevel.ERROR`, `LogLevel.CRITICAL`
             - message(str)
 
+    - Attributes:
+        - name: The name of the log
+        - root_dir: The root directory of the log file
+        - log_dir: The directory of the log file
+        - current_log_file_path: The current log file path
+        - zip_file_path: The zip file path
+        - enableConsoleOutput: Whether to enable console output
+        - enableFileOutput: Whether to enable file output
+        - enableDailySplit: Whether to enable daily split
+        - enableRuntimeZip: Whether to enable runtime zip
+        - isStrictLimit: Whether to enable strict limit. If True, the log file will be deleted when the limit is reached, If false, the log file will be deleted by the startup time
+        - enableQThreadtracking: Whether to enable QThread tracking
+        - log_level: The log level
+        - limit_single_file_size_Bytes: The limit size of a single log file
+        - limit_files_count: The limit count of log files
+        - limit_files_days: The limit days of log files
+        - message_format: The format of the log message
+        - highlight_type: The highlight type of the log message
+        - exclude_functions: The functions to exclude from logging
+        - exclude_classes: The classes to exclude from logging
+        - exclude_modules: The modules to exclude from logging
+
     - methods:
         - trace(*message): Output trace information, support multiple parameters
         - debug(*message): Output debug information, support multiple parameters

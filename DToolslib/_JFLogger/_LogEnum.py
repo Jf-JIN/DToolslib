@@ -137,19 +137,23 @@ class _LogMessageItem(object):
 
     def set_text(self, text) -> None:
         self.__text = text
-        text_color = self.__color_font.ANSI_TXT if isinstance(self.__color_font, _ColorMapItem) else self.__color_font
-        background_color = self.__color_background.ANSI_BG if isinstance(self.__color_background, _ColorMapItem) else self.__color_background
+        text_color: _ColorMapItem = self.__color_font
+        background_color = self.__color_background
         self.__text_color = self.__colorize_text(self.__text, text_color, background_color, self.__bold, self.__dim, self.__italic, self.__underline, self.__blink)
         self.__text_console = ansi_color_text(text, text_color, background_color, self.__bold, self.__dim, self.__italic, self.__underline, self.__blink)
 
-    def __colorize_text(self, text: str, text_color, background_color, *args, highlight_type=None, **kwargs) -> str:
+    def __colorize_text(self, text: str, text_color: _ColorMapItem, background_color: _ColorMapItem, *args, highlight_type=None, **kwargs) -> str:
         if highlight_type is None:
             highlight_type = self.__highlight_type
             if highlight_type is None:
                 return text
         if highlight_type == LogHighlightType.ANSI:
+            text_color = text_color.ANSI_TXT if isinstance(text_color, _ColorMapItem) else text_color
+            background_color = background_color.ANSI_BG if isinstance(background_color, _ColorMapItem) else background_color
             return ansi_color_text(text, text_color, background_color, *args, **kwargs)
         elif highlight_type == LogHighlightType.HTML:
+            text_color = text_color.HEX if isinstance(text_color, _ColorMapItem) else text_color
+            background_color = background_color.HEX if isinstance(background_color, _ColorMapItem) else background_color
             return html_color_text(text, text_color, background_color, *args, **kwargs)
         return text
 

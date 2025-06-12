@@ -46,7 +46,8 @@ class _itemBase:
         if key == f'_{self.__class__.__name__}__attr_lock' and hasattr(self, f'_{self.__class__.__name__}__attr_lock') and getattr(self, f'_{self.__class__.__name__}__attr_lock'):
             return
         if (key in self.__dict__ and key != f'_{self.__class__.__name__}__attr_lock') or (hasattr(self, f'_{self.__class__.__name__}__attr_lock')):
-            raise AttributeError(f'Enumeration items are immutable and cannot be modified: <{key}> = {value}')
+            error_text = f'Enumeration items are immutable and cannot be modified: <{key}> = {value}'
+            raise AttributeError(ansi_color_text(error_text, 33))
         super().__setattr__(key, value)
 
 
@@ -123,7 +124,8 @@ class _StaticEnumDict(dict):
 
     def __setitem__(self, key: str, value) -> None:
         if key in self._member_names:
-            raise ValueError(f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}')
+            error_text = f'Enumeration item duplication: already exists\t< {key} > = {self._member_names[key]}'
+            raise ValueError(ansi_color_text(error_text, 33))
         # 替换枚举项的类型, 增加扩展性
         if self._enable_member_attribute and (type(value) in _static_enum_dict) and key not in _object_attr and not (key.startswith('__') and key.endswith('__')):
             # 默认所有 __名称__ 的属性都是类的重要属性, 不能被枚举项占用
@@ -218,7 +220,11 @@ class _StaticEnumMeta(type):
                             setattr(cls, key, item)
                             break
                 else:
-                    raise ValueError('StaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.')
+                    # 静态仅支持没有默认值的INT类型成员。对于其他类型，请明确分配一个默认值。
+                    match_text = ansi_color_text(f'{name} -> {key}: {value}', 36)
+                    error_text = ansi_color_text(f'Warning: ', 33) + match_text +\
+                        ansi_color_text('\nStaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.\n', 33)
+                    print(error_text)
         if cls.__enable_member_attribute__ and cls.__enable_member_extension__:
             _recursion_set_attr_lock(cls)
         cls.__members__['isAllowedSetValue'] = False
@@ -227,9 +233,11 @@ class _StaticEnumMeta(type):
     def __setattr__(cls, key, value):
         if key in cls.__members__['data'] and not cls.__members__['isAllowedSetValue']:
             ori = cls.__members__['data'][key]
-            raise TypeError(f'Modification of the member "{key}" in the "{cls.__name__}" enumeration is not allowed. < {key} > = {ori}')
+            error_text = f'Modification of the member "{key}" in the "{cls.__name__}" enumeration is not allowed. < {key} > = {ori}'
+            raise TypeError(ansi_color_text(error_text, 33))
         elif key not in cls.__members__ and not isinstance(value, type) and '__attr_lock' not in key and not cls.__members__['isAllowedSetValue']:
-            raise TypeError(f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.')
+            error_text = f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.'
+            raise TypeError(ansi_color_text(error_text, 33))
         super().__setattr__(key, value)
 
     def __repr__(cls):
@@ -388,11 +396,14 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=True, enable
         return cls.__members__['data'].values()
 
     @classmethod
-    def getItemByValue(cls, item):
+    def getItemByValue(cls, item, default=_null):
         for key, value in cls.__members__['data'].items():
             if value == item:
                 return value
-        raise AttributeError(f'Item {item} not found in {cls.__name__}')
+        error_text = f'Item {item} not found in {cls.__name__}'
+        if default is not _null:
+            return default
+        raise AttributeError(ansi_color_text(error_text, 33))
 
 
 """ 

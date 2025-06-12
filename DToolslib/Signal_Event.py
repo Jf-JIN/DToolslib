@@ -50,7 +50,6 @@ class BoundSignal:
     """
 
     def __init__(self, name, *types, async_exec=False, use_priority=False, context=None) -> None:
-        print(types)
         if ... in types:
             self.__types = ...
         elif all([isinstance(typ, (type, tuple, typing.TypeVar, str, typing.Any)) for typ in types]):
@@ -151,6 +150,12 @@ class BoundSignal:
         """
         self.__slots_with_priority.clear()
         self.__slots_without_priority.clear()
+
+    def __copy__(self) -> 'EventSignal':
+        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority, context=self.__context)
+
+    def __deepcopy__(self, memo: typing.Dict) -> 'EventSignal':
+        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority, context=self.__context)
 
     def __str__(self) -> str:
         return f'<Signal BoundSignal(slots:{len(self.__slots)}) {self.__name} at 0x{id(self):016X}>'
@@ -447,9 +452,6 @@ class EventSignal:
                 context=context,
             )
         return instance.__signals__[self]
-
-    def __x__(self, content):
-        print(content)
 
 
 """

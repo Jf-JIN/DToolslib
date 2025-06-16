@@ -367,9 +367,9 @@ class EventSignal:
 
     - Args:
         - *types (type or tuple): Types of signal arguments. 信号参数的类型。
-        - signal_scope (str): Scope of the signal: "instance" or "class". 信号作用域，可选 "instance" 或 "class"。
-            - "instance" (default): Signal bound to each instance. 默认，绑定到实例的信号。
-            - "class": Signal shared across the class. 类级信号，多个实例共享。
+        - isClassSignal (bool):  Whether the signal is a class signal. 是否为类级信号。
+            - True: Class signal, shared across instances. 类级信号，多个实例共享。
+            - False (default): Instance signal, bound to each instance. 实例信号，绑定到实例。
         - async_exec (bool): Whether to emit signals asynchronously. 是否异步发射信号。
         - use_priority (bool): Whether to call slots in priority order. 是否按优先级调用槽函数。
 
@@ -400,9 +400,9 @@ class EventSignal:
         仅可在类体中定义。通过参数 signal_scope 可定义为实例信号或类信号。
     """
 
-    def __init__(self, *types: typing.Union[type, tuple], signal_scope: str = 'instance', async_exec: bool = False) -> None:
+    def __init__(self, *types: typing.Union[type, tuple], isClassSignal: bool = False, async_exec: bool = False) -> None:
         self.__types = types
-        self.__scope = signal_scope
+        self.__isClassSignal = isClassSignal
         self.__async_exec: bool = async_exec
 
     def __get__(self, instance, instance_type) -> _BoundSignal:
@@ -411,7 +411,7 @@ class EventSignal:
         else:
             module = sys.modules[instance_type.__module__]
             module_globals = module.__dict__
-            if self.__scope == 'class':
+            if self.__isClassSignal:
                 return self.__handle_class_signal(instance_type, module_globals)
             else:
                 return self.__handle_instance_signal(instance, module_globals)

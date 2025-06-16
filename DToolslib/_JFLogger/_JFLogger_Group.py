@@ -108,10 +108,10 @@ class JFLoggerGroup(object):
             raise FileNotFoundError(f'{self.__class__.__name__} root dir "{root_dir}" does not exist, create it.')
         else:
             warning_text = (
-                ansi_color_text('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
-                ansi_color_text(f'{self.__class__.__name__}\n   ', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
+                ansi_color_text('< WARNING > No File Output from ', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
+                ansi_color_text(f'{self.__class__.__name__}', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
                 ansi_color_text(
-                    f'- No log file will be recorded because the log root path is not specified. The current root path input is "{self.__root_path}". Type: {type(self.__root_path)}', txt_color=_ColorMap.YELLOW.ANSI_TXT)
+                    f'\n   - No log file will be recorded because the log root path is not specified. The current root path input is "{self.__root_path}". Type: {type(self.__root_path)}\n', txt_color=_ColorMap.YELLOW.ANSI_TXT)
             )
             if sys.stdout:
                 sys.stdout.write(warning_text)

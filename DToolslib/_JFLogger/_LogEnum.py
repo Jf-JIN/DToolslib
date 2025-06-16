@@ -138,9 +138,11 @@ class _LogMessageItem(object):
     def set_text(self, text) -> None:
         self.__text = text
         text_color: _ColorMapItem = self.__color_font
-        background_color = self.__color_background
+        background_color: _ColorMapItem = self.__color_background
+        ansi_text_color = text_color.ANSI_TXT if text_color else ''
+        ansi_background_color = background_color.ANSI_BG if background_color else ''
         self.__text_color = self.__colorize_text(self.__text, text_color, background_color, self.__bold, self.__dim, self.__italic, self.__underline, self.__blink)
-        self.__text_console = ansi_color_text(text, text_color, background_color, self.__bold, self.__dim, self.__italic, self.__underline, self.__blink)
+        self.__text_console = ansi_color_text(text, ansi_text_color, ansi_background_color, self.__bold, self.__dim, self.__italic, self.__underline, self.__blink)
 
     def __colorize_text(self, text: str, text_color: _ColorMapItem, background_color: _ColorMapItem, *args, highlight_type=None, **kwargs) -> str:
         if highlight_type is None:

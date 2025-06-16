@@ -258,7 +258,8 @@ class JFLogger(object):
     def __new__(cls, log_name, *args, **kwargs):
         instance = super().__new__(cls)
         if log_name in cls.__logger_name_list__:
-            raise ValueError(f'JFLogger "{log_name}" already exists.')
+            error_text = ansi_color_text(f'JFLogger "{log_name}" already exists.', 33)
+            raise ValueError(error_text)
         cls.__logger_name_list__.append(log_name)
         cls.__instance_list__.append(instance)
         return instance
@@ -277,14 +278,16 @@ class JFLogger(object):
         self.__log_name = log_name
         self.__root_folder_name = root_folder_name if root_folder_name else _Log_Default.ROOT_FOLDER_NAME
         if not isinstance(root_dir, str):
-            raise ValueError(f'<WARNING> Log root dir "{root_dir}" is not a string.')
+            error_text = ansi_color_text(f'<WARNING> Log root dir "{root_dir}" is not a string.', 33)
+            raise ValueError(error_text)
         self.__root_dir: str = root_dir
         self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
         self.__isExistsPath = False
         if self.__root_dir and os.path.exists(self.__root_dir):
             self.__isExistsPath = True
         elif self.__root_dir:
-            raise FileNotFoundError(f'Log root dir "{self.__root_dir}" does not exist, create it.')
+            error_text = ansi_color_text(f'<ERROR> Log root dir "{self.__root_dir}" does not exist.', 33)
+            raise FileNotFoundError(error_text)
         else:
             warning_text = (
                 ansi_color_text('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
@@ -297,7 +300,8 @@ class JFLogger(object):
         self.__log_folder_name = log_folder_name if isinstance(log_folder_name, str) and log_folder_name else self.__log_name
         self.__log_dir = os.path.join(self.__root_path, self.__log_folder_name)
         if self.__log_folder_name in self.__class__.__log_folder_name_list__:
-            raise ValueError(f'<WARNING> Log folder name "{self.__log_folder_name}" is already in use.')
+            error_text = ansi_color_text(f'<ERROR> Log folder name "{self.__log_folder_name}" is already in use.', 33)
+            raise ValueError(error_text)
         self.__class__.__log_folder_name_list__.append(self.__log_folder_name)
         self.__log_level: LogLevel = LogLevel._normalize_log_level(log_level)
         self.__enableConsoleOutput: bool = enableConsoleOutput if isinstance(enableConsoleOutput, bool) else True
@@ -439,7 +443,8 @@ class JFLogger(object):
                 self.__var_dict[name] = _LogMessageItem(name, _ColorMap.CYAN)
             self.__var_dict[name].set_text(value)
         if hasattr(self, f'_{self.__class__.__name__}__kwargs') and (not name.startswith(f'_{self.__class__.__name__}__') and name not in ['__signals__', '__class_signals__'] and name not in self.__dict__):
-            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+            error_text = ansi_color_text(f"'{self.__class__.__name__}' object has no attribute '{name}'", 33)
+            raise AttributeError(error_text)
         super().__setattr__(name, value)
 
     def __clear_files(self) -> None:
@@ -1099,7 +1104,8 @@ class JFLogger(object):
             - size_limit(int | float): Single log file size limit, unit is KB
         """
         if not isinstance(size_limit, (int, float)):
-            raise TypeError("size_limit must be int")
+            error_text = ansi_color_text(f"size_limit must be int or float, but {type(size_limit)} was given.", 33)
+            raise TypeError(error_text)
         self.__limit_single_file_size_Bytes: typing.Union[int, float] = size_limit * 1000
         return self
 
@@ -1111,7 +1117,8 @@ class JFLogger(object):
             - count_limit(int): Limit number of log files in folders
         """
         if not isinstance(count_limit, int):
-            raise TypeError("count_limit must be int")
+            error_text = ansi_color_text(f"count_limit must be int, but {type(count_limit)} was given.", 33)
+            raise TypeError(error_text)
         if isStict:
             self.__isStrictLimit = True
         else:
@@ -1128,7 +1135,8 @@ class JFLogger(object):
             - days_limit(int): Day limit for log files in folders
         """
         if not isinstance(days_limit, int):
-            raise TypeError("days_limit must be int")
+            error_text = ansi_color_text(f"days_limit must be int, but {type(days_limit)} was given.", 33)
+            raise TypeError(error_text)
         if isStict:
             self.__isStrictLimit = True
         else:
@@ -1188,7 +1196,8 @@ class JFLogger(object):
 
         """
         if not isinstance(message_format, str):
-            raise TypeError("message_format must be str")
+            error_text = ansi_color_text(f"message_format must be str, but {type(message_format)} was given.", 33)
+            raise TypeError(error_text)
         if not message_format:
             self.__message_format = _Log_Default.MESSAGE_FORMAT
         else:
@@ -1226,6 +1235,82 @@ class Logger(JFLogger):
     and it will be removed in the future.
     """
     pass
+
+
+class JFClassLogger:
+    def __init__(
+        self,
+        log_name: str,
+        root_dir: str = '',
+        root_folder_name: str = '',
+        log_folder_name: str = '',
+        log_level: typing.Union[str, int] = LogLevel.INFO,
+        enableConsoleOutput: bool = True,
+        enableFileOutput: bool = True,
+        isStaticLogger: bool = False,
+        **kwargs,
+    ) -> None:
+        self.__log_name = log_name
+        self.__isStaticLogger = isStaticLogger
+        self.__root_dir = root_dir
+        self.__root_folder_name = root_folder_name
+        self.__log_folder_name = log_folder_name
+        self.__log_level = log_level
+        self.__enableConsoleOutput = enableConsoleOutput
+        self.__enableFileOutput = enableFileOutput
+        self.__kwargs = kwargs
+
+    def __get__(self, instance, instance_type) -> JFLogger:
+        if instance is None:
+            return self
+        else:
+            module = sys.modules[instance_type.__module__]
+            module_globals = module.__dict__
+            if self.__isStaticLogger:
+                return self.__handle_class_logger(instance_type)
+            else:
+                return self.__handle_instance_logger(instance)
+
+    def __set__(self, instance, value) -> None:
+        if value is self.__get__(instance, type(instance)):
+            return
+        error_text = ansi_color_text(f'JFClassLogger <{self.__log_name}> is read-only, cannot be set', 33)
+        raise AttributeError(error_text)
+
+    def __set_name__(self, instance, name) -> None:
+        self.__name = name
+
+    def __handle_class_logger(self, instance_type) -> JFLogger:
+        if not hasattr(instance_type, '__class_logger__'):
+            instance_type.__class_logger__ = {}
+        if self not in instance_type.__class_logger__:
+            instance_type.__class_logger__[self] = JFLogger(
+                log_name=self.__log_name,
+                root_dir=self.__root_dir,
+                root_folder_name=self.__root_folder_name,
+                log_folder_name=self.__log_folder_name,
+                log_level=self.__log_level,
+                enableConsoleOutput=self.__enableConsoleOutput,
+                enableFileOutput=self.__enableFileOutput,
+                **self.__kwargs
+            )
+        return instance_type.__class_logger__[self]
+
+    def __handle_instance_logger(self, instance) -> JFLogger:
+        if not hasattr(instance, '__logger__'):
+            instance.__logger__ = {}
+        if self not in instance.__logger__:
+            instance.__logger__[self] = JFLogger(
+                log_name=self.__log_name,
+                root_dir=self.__root_dir,
+                root_folder_name=self.__root_folder_name,
+                log_folder_name=self.__log_folder_name,
+                log_level=self.__log_level,
+                enableConsoleOutput=self.__enableConsoleOutput,
+                enableFileOutput=self.__enableFileOutput,
+                **self.__kwargs
+            )
+        return instance.__logger__[self]
 
 
 """ 

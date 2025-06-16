@@ -1,4 +1,4 @@
-from ._JFLogger import JFLogger, Logger
+from ._JFLogger import JFLogger, Logger, JFClassLogger
 from ._JFLogger_Group import JFLoggerGroup, LoggerGroup
 from ._LogEnum import LogLevel, LogHighlightType
 
@@ -8,5 +8,6 @@ __all__ = [
     "JFLoggerGroup",
     "LoggerGroup",
     "LogLevel",
-    "LogHighlightType"
+    "LogHighlightType",
+    "JFClassLogger"
 ]

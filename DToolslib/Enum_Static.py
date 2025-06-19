@@ -9,6 +9,7 @@
 """
 __all__ = ['StaticEnum']
 import typing
+import json
 from .Color_Text import ansi_color_text
 
 
@@ -216,7 +217,7 @@ class _StaticEnumMeta(type):
                                 item.name = key
                             else:
                                 item: int = enum_int_num
-                            cls.__members__[key] = item
+                            cls.__members__['data'][key] = item
                             setattr(cls, key, item)
                             break
                 else:
@@ -261,7 +262,7 @@ class _StaticEnumMeta(type):
         return item in self.__members__['data'].keys()
 
 
-class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=True, enable_member_extension=True):
+class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enable_member_extension=False):
     """
     StaticEnum is a static enumeration class with enhanced enum member capabilities,
     implemented via the custom metaclass `_StaticEnumMeta`.
@@ -404,6 +405,17 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=True, enable
         if default is not _null:
             return default
         raise AttributeError(ansi_color_text(error_text, 33))
+
+    @classmethod
+    def to_json(cls):
+        temp = {}
+        for key, item in cls.__members__['data'].items():
+            try:
+                json.dumps(item)
+            except:
+                continue
+            temp[key] = item
+        return temp
 
 
 """ 

@@ -206,6 +206,8 @@ class _StaticEnumMeta(type):
         # 处理未赋值枚举项
         enum_int_num = -1
         if '__annotations__' in dct:
+            ori_lock_status = cls.__members__['isAllowedSetValue']
+            cls.__members__['isAllowedSetValue'] = True
             for key, value in dct['__annotations__'].items():
                 if value == int:
                     while True:
@@ -226,6 +228,7 @@ class _StaticEnumMeta(type):
                     error_text = ansi_color_text(f'Warning: ', 33) + match_text +\
                         ansi_color_text('\nStaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.\n', 33)
                     print(error_text)
+            cls.__members__['isAllowedSetValue'] = ori_lock_status
         if cls.__enable_member_attribute__ and cls.__enable_member_extension__:
             _recursion_set_attr_lock(cls)
         cls.__members__['isAllowedSetValue'] = False

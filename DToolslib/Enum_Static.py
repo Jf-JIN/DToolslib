@@ -150,12 +150,22 @@ class _StaticEnumMeta(type):
     @classmethod
     def __prepare__(metacls, cls, bases, enable_member_attribute: bool = False, enable_member_extension: bool = False, enum_value_mode: bool = False, *args, ** kwargs) -> _StaticEnumDict:
         # print(f'prepare - {cls}: {enable_member_attribute}, {enable_member_extension}, {enum_value_mode}')
+        if (enable_member_attribute or enable_member_extension) and enum_value_mode != 0:
+            warning_text = ansi_color_text(
+                f'<StaticEnum -> {cls}> enable_member_attribute and enum_value_mode are mutually exclusive, please choose one. Otherwise, the enable_member_attribute will be invalid.', 33)
+            print(warning_text)
+        if enable_member_extension and not enable_member_attribute:
+            warning_text = ansi_color_text(
+                f'<StaticEnum -> {cls}> befor enable_member_attribute, please enable enable_member_extension first. Otherwise, the enable_member_attribute will be invalid.', 33)
+            print(warning_text)
         enum_dict = _StaticEnumDict(enable_member_attribute, enable_member_extension, enum_value_mode)
         enum_dict._cls_name = cls
         return enum_dict
 
     def __new__(mcs, name, bases, dct: dict, *args, **kwargs):
         def _get_enum_int_value(cls, key, value, isInt=True) -> int:
+            if hasattr(value, '__qualname__') and "." in value.__qualname__:
+                return value
             while True:
                 cls.__enum_int_num__ += 1
                 if cls.__enum_int_num__ not in cls.__int_enums__.values():
@@ -200,7 +210,7 @@ class _StaticEnumMeta(type):
                 if isinstance(obj, _StaticEnumMeta):
                     _recursion_set_attr_lock(obj)
                     continue
-                if type(obj) not in _static_enum_dict:
+                if type(obj) not in _static_enum_dict.values():
                     continue
                 setattr(obj, f'_{obj.__class__.__name__}__attr_lock', True)
 
@@ -300,7 +310,7 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enabl
     Class-level Parameters (received by metaclass):
     - enable_member_attribute: bool
         Enable attribute binding on enum members. If True, allows `MyEnum.A.some_attr = 123`.
-        Also, each enum member automatically gets two built-in attributes: `name` and `value`,  
+        Also, each enum member automatically gets two built-in attributes: `name` and `value`,
         where `name` stores the member's identifier (e.g., `'A'`), and `value` stores its assigned value.
 
     - enable_member_extension: bool
@@ -323,7 +333,7 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enabl
         Find enum member by value; raise AttributeError if not found.
 
 
-    StaticEnum 是一种静态枚举类, 通过自定义元类 `_StaticEnumMeta` 实现了增强的枚举项功能. 
+    StaticEnum 是一种静态枚举类, 通过自定义元类 `_StaticEnumMeta` 实现了增强的枚举项功能.
 
     功能特性:
     - 枚举项不可修改(保证静态性)
@@ -336,13 +346,13 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enabl
 
 
     参数说明 (由元类接收):
-    - enable_member_attribute: bool  
+    - enable_member_attribute: bool
         是否启用为枚举项绑定属性的功能. 启用后, 可以通过 `MyEnum.A.some_attr = 123` 添加属性.
-        同时, 枚举项会自动获得两个内置属性: `name` 和 `value`,   
+        同时, 枚举项会自动获得两个内置属性: `name` 和 `value`,
         其中 `name` 保存变量名(如 `'A'`), `value` 保存枚举项的值(如 `MyEnum.A` 的实际值
 
-    - enable_member_extension: bool  
-        是否允许在类定义外部对枚举项添加新属性, 例如在运行时动态添加.   
+    - enable_member_extension: bool
+        是否允许在类定义外部对枚举项添加新属性, 例如在运行时动态添加.
 
     提供的方法 Methods:
     - cls.members() -> list[(key, value)]
@@ -357,7 +367,7 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enabl
     - cls.values() -> dict_values
         返回所有枚举项的值集合
 
-    - cls.getItemByValue(value) -> EnumMember  
+    - cls.getItemByValue(value) -> EnumMember
         根据值查找对应的枚举成员, 否则抛出 AttributeError
 
     用法示例 Example:
@@ -434,12 +444,15 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enabl
             try:
                 json.dumps(item)
             except:
-                continue
+                if isinstance(item, _StaticEnumMeta):
+                    item = item.to_json()
+                else:
+                    continue
             temp[key] = item
         return temp
 
 
-""" 
+"""
 if __name__ == '__main__':
     class TestEnum(StaticEnum, enable_member_attribute=True):
         A = '#ff0000'

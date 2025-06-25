@@ -166,6 +166,8 @@ class _StaticEnumMeta(type):
         def _get_enum_int_value(cls, key, value, isInt=True) -> int:
             if hasattr(value, '__qualname__') and "." in value.__qualname__:
                 return value
+            ori_lock_status = cls.__members__['isAllowedSetValue']
+            cls.__members__['isAllowedSetValue'] = True
             while True:
                 cls.__enum_int_num__ += 1
                 if cls.__enum_int_num__ not in cls.__int_enums__.values():
@@ -174,6 +176,7 @@ class _StaticEnumMeta(type):
                         return cls.__enum_int_num__
                     else:
                         return str(cls.__enum_int_num__)
+            cls.__members__['isAllowedSetValue'] = ori_lock_status
 
         def _convert_to_enum_item(cls, key, value, enable_member_attribute: bool, enable_member_extension: bool, enum_value_mode: bool, *args, **kwargs) -> None:
             cls_dict = dict(value.__dict__)
@@ -204,6 +207,7 @@ class _StaticEnumMeta(type):
                 cls_dict
             )
             setattr(cls, key, new_cls)
+            cls.__members__['data'][key] = new_cls
 
         def _recursion_set_attr_lock(cls):
             for obj_name, obj in cls.__members__['data'].items():

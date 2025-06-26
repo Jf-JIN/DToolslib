@@ -171,3 +171,5 @@ cython_debug/
 .pypirc
 *.whl
 setup.bat
+test.py
+test.py

@@ -173,10 +173,11 @@ class _StaticEnumMeta(type):
                 if cls.__enum_int_num__ not in cls.__int_enums__.values():
                     cls.__int_enums__[key] = cls.__enum_int_num__
                     if isInt:
+                        cls.__members__['isAllowedSetValue'] = ori_lock_status
                         return cls.__enum_int_num__
                     else:
+                        cls.__members__['isAllowedSetValue'] = ori_lock_status
                         return str(cls.__enum_int_num__)
-            cls.__members__['isAllowedSetValue'] = ori_lock_status
 
         def _convert_to_enum_item(cls, key, value, enable_member_attribute: bool, enable_member_extension: bool, enum_value_mode: bool, *args, **kwargs) -> None:
             cls_dict = dict(value.__dict__)

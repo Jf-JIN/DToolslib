@@ -212,6 +212,10 @@ class JFLogger(object):
         return self.__enableRuntimeZip
 
     @property
+    def enableTracebackException(self) -> bool:
+        return self.__enableTracebackException
+
+    @property
     def isStrictLimit(self) -> bool:
         return self.__isStrictLimit
 
@@ -307,7 +311,8 @@ class JFLogger(object):
         self.__enableConsoleOutput: bool = enableConsoleOutput if isinstance(enableConsoleOutput, bool) else True
         self.__enableFileOutput: bool = enableFileOutput if isinstance(enableFileOutput, bool) else True
         self.__enableQThreadtracking: bool = False
-        self.__enableContinueWithLastFile = False
+        self.__enableContinueWithLastFile: bool = False
+        self.__enableTracebackException: bool = False
         self.__last_log_file_path = ''
         self.__kwargs: dict = kwargs
         self.__init_params()
@@ -538,8 +543,12 @@ class JFLogger(object):
                 continue
 
             # 提取类名
-            self_obj = caller_frame.f_locals.get('self', None)
-            temp_class_name = self_obj.__class__.__name__ if self_obj is not None else ''
+            if caller_frame.f_locals.get('self', None) is not None:
+                temp_class_name = caller_frame.f_locals['self'].__class__.__name__
+            elif caller_frame.f_locals.get('cls', None) is not None:
+                temp_class_name = caller_frame.f_locals['cls'].__name__
+            else:
+                temp_class_name = ''
 
             # 检查类级排除
             class_func_name = f"{temp_class_name}.{function_name}"
@@ -608,12 +617,14 @@ class JFLogger(object):
     def __format(self, log_level: int, *args) -> tuple:
         """ Format log message """
         msg_list = []
-        for arg in args:
+        for idx, arg in enumerate(args):
+            if idx > 0 and not args[idx - 1].endswith('\n') and not arg.startswith('\n'):
+                msg_list.append(' ')
             if isinstance(arg, (dict, list, tuple)):
                 msg_list.append(pprint.pformat(arg))
             else:
                 msg_list.append(str(arg))
-        msg = ' '.join(message for message in msg_list)
+        msg = ''.join(message for message in msg_list)
         caller_info = self.__find_caller()
         script_path = caller_info['script_path']
         line_num = caller_info['line_num']
@@ -835,10 +846,15 @@ class JFLogger(object):
 
         You can specify the log level of the exception message, default is ERROR.        
         """
-        exception_str = traceback.format_exc()
-        if exception_str == f'{type(None).__name__}: {None}\n':
+        if self.__enableTracebackException:
+            exception_str = traceback.format_exc()
+        else:
+            exc_type, exc_value, _ = sys.exc_info()
+            exception_str = f'{exc_type.__name__}: {exc_value}'
+        if exception_str == f'{type(None).__name__}: {None}':
             return
-        exception_str += '\n'
+        if len(args) != 0:
+            exception_str += '\n'
         level = LogLevel._normalize_log_level(level)
         if level == LogLevel.TRACE:
             self.trace(exception_str, *args, **kwargs)
@@ -1225,6 +1241,16 @@ class JFLogger(object):
             - enable(bool): If True, use QThread.objectName() to represent the thread name.
         """
         self.__enableQThreadtracking = enable
+        return self
+
+    def set_enable_trackback_exception(self, enable: bool) -> typing.Self:
+        """ 
+        Set whether to use traceback to represent the exception information in exception()
+
+        - Args:
+            - enable(bool): If True, use traceback to represent the exception information in exception().
+        """
+        self.__enableTracebackException = enable
         return self
 
 

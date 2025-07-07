@@ -186,6 +186,10 @@ class _StaticEnumMeta(type):
             cls_dict['__enum_value_mode__'] = enum_value_mode
             cls_dict['__int_enums__'] = {}
             cls_dict['__enum_int_num__'] = -1
+            cls_dict['__members__'] = {
+                'isAllowedSetValue': False,  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
+                'data': {}  # 用于存储枚举项的值
+            }
 
             for sub_key, sub_value in cls_dict.items():
                 sub_key: str
@@ -208,6 +212,11 @@ class _StaticEnumMeta(type):
                 cls_dict
             )
             setattr(cls, key, new_cls)
+            if not hasattr(cls, '__members__'):
+                cls.__members__ = {
+                    'isAllowedSetValue': False,
+                    'data': {}
+                }
             cls.__members__['data'][key] = new_cls
 
         def _recursion_set_attr_lock(cls):

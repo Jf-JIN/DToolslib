@@ -8,8 +8,11 @@
     - `int`, `float`, `str`, `list`, `tuple`, `set`, `frozenset`, `dict`, `complex`, `bytes`, `bytearray`
 """
 __all__ = ['StaticEnum']
+
+import pprint
 import typing
 import json
+
 from .Color_Text import ansi_color_text
 
 
@@ -30,7 +33,7 @@ _null = _null()
 _object_attr = [
     '__new__', '__repr__', '__call__', '__hash__', '__str__', '__getattribute__', '__setattr__', '__delattr__', '__lt__', '__le__', '__eq__', '__ne__', '__gt__', '__ge__',
     '__init__', '__or__', '__ror__', 'mro', '__subclasses__', '__prepare__', '__instancecheck__', '__subclasscheck__', '__reduce_ex__', '__reduce__', '__getstate__', '__subclasshook__', '__init_subclass__', '__format__', '__sizeof__', '__basicsize__', '__dir__', '__class__', '__doc__', '__itemsize__', '__flags__', '__weakrefoffset__',
-    '__module__', '__qualname__', '__members__', '__base__', '__dictoffset__', '__mro__', '__name__', '__abstractmethods__', '__bases__', '__dict__', '__text_signature__', '__annotations__', '__isAllowedSetValue__', '__enable_member_attribute__', '__enable_member_extension__', '__int_enums__',
+    '__module__', '__qualname__', '__SE_members__', '__base__', '__dictoffset__', '__mro__', '__name__', '__abstractmethods__', '__bases__', '__dict__', '__text_signature__', '__annotations__', '__isAllowedSetValue__', '__enable_member_attribute__', '__enable_member_extension__', '__int_enums__',
 ]
 
 
@@ -166,17 +169,17 @@ class _StaticEnumMeta(type):
         def _get_enum_int_value(cls, key, value, isInt=True) -> int:
             if hasattr(value, '__qualname__') and "." in value.__qualname__:
                 return value
-            ori_lock_status = cls.__members__['isAllowedSetValue']
-            cls.__members__['isAllowedSetValue'] = True
+            ori_lock_status = cls.__SE_members__['isAllowedSetValue']
+            cls.__SE_members__['isAllowedSetValue'] = True
             while True:
                 cls.__enum_int_num__ += 1
                 if cls.__enum_int_num__ not in cls.__int_enums__.values():
                     cls.__int_enums__[key] = cls.__enum_int_num__
                     if isInt:
-                        cls.__members__['isAllowedSetValue'] = ori_lock_status
+                        cls.__SE_members__['isAllowedSetValue'] = ori_lock_status
                         return cls.__enum_int_num__
                     else:
-                        cls.__members__['isAllowedSetValue'] = ori_lock_status
+                        cls.__SE_members__['isAllowedSetValue'] = ori_lock_status
                         return str(cls.__enum_int_num__)
 
         def _convert_to_enum_item(cls, key, value, enable_member_attribute: bool, enable_member_extension: bool, enum_value_mode: bool, *args, **kwargs) -> None:
@@ -186,11 +189,10 @@ class _StaticEnumMeta(type):
             cls_dict['__enum_value_mode__'] = enum_value_mode
             cls_dict['__int_enums__'] = {}
             cls_dict['__enum_int_num__'] = -1
-            cls_dict['__members__'] = {
+            cls_dict['__SE_members__'] = {
                 'isAllowedSetValue': False,  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
                 'data': {}  # 用于存储枚举项的值
             }
-
             for sub_key, sub_value in cls_dict.items():
                 sub_key: str
                 sub_value: str
@@ -211,16 +213,15 @@ class _StaticEnumMeta(type):
                 (StaticEnum,),
                 cls_dict
             )
-            setattr(cls, key, new_cls)
-            if not hasattr(cls, '__members__'):
-                cls.__members__ = {
+            if not hasattr(cls, '__SE_members__'):
+                cls.__SE_members__ = {
                     'isAllowedSetValue': False,
                     'data': {}
                 }
-            cls.__members__['data'][key] = new_cls
+            cls.__SE_members__['data'][key] = new_cls
 
         def _recursion_set_attr_lock(cls):
-            for obj_name, obj in cls.__members__['data'].items():
+            for obj_name, obj in cls.__SE_members__['data'].items():
                 if isinstance(obj, _StaticEnumMeta):
                     _recursion_set_attr_lock(obj)
                     continue
@@ -230,7 +231,7 @@ class _StaticEnumMeta(type):
 
         if len(bases) == 0:
             return super().__new__(mcs, name, bases, dct)
-        dct['__members__'] = {  # 用于存储枚举项的字典
+        dct['__SE_members__'] = {  # 用于存储枚举项的字典
             'isAllowedSetValue': False,  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
             'data': {}  # 用于存储枚举项的值
         }
@@ -238,23 +239,23 @@ class _StaticEnumMeta(type):
         members = {key: value for key, value in dct.items() if not key.startswith('__')}
         cls = super().__new__(mcs, name, bases, dct)
         for key, value in members.items():
-            if key == 'isAllowedSetValue' or key == '__members__':
+            if key == 'isAllowedSetValue' or key == '__SE_members__':
                 continue
             elif isinstance(value, type) and not issubclass(value, StaticEnum) and value is not cls:
                 # 针对非StaticEnum子类的嵌套类, 做类转换处理
                 _convert_to_enum_item(cls, key, value, dct['__enable_member_attribute__'], dct['__enable_member_extension__'], dct['__enum_value_mode__'])
                 continue
-            cls.__members__['isAllowedSetValue'] = True
+            cls.__SE_members__['isAllowedSetValue'] = True
             if cls.__enum_value_mode__ == 1:
                 value = _get_enum_int_value(cls, key, value, isInt=True)
             elif cls.__enum_value_mode__ == 2:
                 value = _get_enum_int_value(cls, key, value, isInt=False)
-            cls.__members__['data'][key] = value
+            cls.__SE_members__['data'][key] = value
             setattr(cls, key, value)
         # 处理未赋值枚举项
         if '__annotations__' in dct:
-            ori_lock_status = cls.__members__['isAllowedSetValue']
-            cls.__members__['isAllowedSetValue'] = True
+            ori_lock_status = cls.__SE_members__['isAllowedSetValue']
+            cls.__SE_members__['isAllowedSetValue'] = True
             for key, value in dct['__annotations__'].items():
                 if value == int:
                     if cls.__enable_member_attribute__:
@@ -262,7 +263,7 @@ class _StaticEnumMeta(type):
                         item.name = key
                     else:
                         item = _get_enum_int_value(cls, key, value)
-                    cls.__members__['data'][key] = item
+                    cls.__SE_members__['data'][key] = item
                     setattr(cls, key, item)
                 else:
                     # 静态仅支持没有默认值的INT类型成员。对于其他类型，请明确分配一个默认值。
@@ -270,24 +271,24 @@ class _StaticEnumMeta(type):
                     error_text = ansi_color_text(f'Warning: ', 33) + match_text +\
                         ansi_color_text('\nStaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.\n', 33)
                     print(error_text)
-            cls.__members__['isAllowedSetValue'] = ori_lock_status
+            cls.__SE_members__['isAllowedSetValue'] = ori_lock_status
         if cls.__enable_member_attribute__ and cls.__enable_member_extension__:
             _recursion_set_attr_lock(cls)
-        cls.__members__['isAllowedSetValue'] = False
+        cls.__SE_members__['isAllowedSetValue'] = False
         return cls
 
     def __setattr__(cls, key, value):
-        if key in cls.__members__['data'] and not cls.__members__['isAllowedSetValue']:
-            ori = cls.__members__['data'][key]
+        if key in cls.__SE_members__['data'] and not cls.__SE_members__['isAllowedSetValue']:
+            ori = cls.__SE_members__['data'][key]
             error_text = f'Modification of the member "{key}" in the "{cls.__name__}" enumeration is not allowed. < {key} > = {ori}'
             raise TypeError(ansi_color_text(error_text, 33))
-        elif key not in cls.__members__ and not isinstance(value, type) and '__attr_lock' not in key and not cls.__members__['isAllowedSetValue']:
+        elif key not in cls.__SE_members__ and not isinstance(value, type) and '__attr_lock' not in key and not cls.__SE_members__['isAllowedSetValue']:
             error_text = f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.'
             raise TypeError(ansi_color_text(error_text, 33))
         super().__setattr__(key, value)
 
     def __repr__(cls):
-        items = list(cls.__members__['data'].items())
+        items = list(cls.__SE_members__['data'].items())
         header = f"\n<StaticEnum> '{cls.__module__}.{cls.__name__}'"
         lines = [ansi_color_text(header, txt_color=33)]
         for i, (k, v) in enumerate(items):
@@ -301,10 +302,10 @@ class _StaticEnumMeta(type):
         return "\n".join(lines) + '\n'
 
     def __iter__(cls):
-        return iter(cls.__members__['data'].values())
+        return iter(cls.__SE_members__['data'].values())
 
     def __contains__(self, item) -> bool:
-        return item in self.__members__['data'].keys()
+        return item in self.__SE_members__['data'].keys()
 
 
 class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enable_member_extension=False, enum_value_mode=0):
@@ -417,33 +418,33 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enabl
     """
 
     def __hasattr__(self, item):
-        return item in self.__members__['data'].keys()
+        return item in self.__SE_members__['data'].keys()
 
     def __getattr__(self, item):
-        return self.__members__['data'][item]
+        return self.__SE_members__['data'][item]
 
     @classmethod
     def members(cls) -> list:
         temp = []
-        for key, value in cls.__members__['data'].items():
+        for key, value in cls.__SE_members__['data'].items():
             temp.append((key, value))
         return temp
 
     @classmethod
     def items(cls):
-        return cls.__members__['data'].items()
+        return cls.__SE_members__['data'].items()
 
     @classmethod
     def keys(cls):
-        return cls.__members__['data'].keys()
+        return cls.__SE_members__['data'].keys()
 
     @classmethod
     def values(cls):
-        return cls.__members__['data'].values()
+        return cls.__SE_members__['data'].values()
 
     @classmethod
     def getItemByValue(cls, item, default=_null):
-        for key, value in cls.__members__['data'].items():
+        for key, value in cls.__SE_members__['data'].items():
             if value == item:
                 return value
         error_text = f'Item {item} not found in {cls.__name__}'
@@ -454,7 +455,7 @@ class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enabl
     @classmethod
     def to_json(cls):
         temp = {}
-        for key, item in cls.__members__['data'].items():
+        for key, item in cls.__SE_members__['data'].items():
             try:
                 json.dumps(item)
             except:

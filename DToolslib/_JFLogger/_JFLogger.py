@@ -617,14 +617,18 @@ class JFLogger(object):
     def __format(self, log_level: int, *args) -> tuple:
         """ Format log message """
         msg_list = []
-        for idx, arg in enumerate(args):
-            if idx > 0 and not args[idx - 1].endswith('\n') and not arg.startswith('\n'):
-                msg_list.append(' ')
+        for arg in args:
             if isinstance(arg, (dict, list, tuple)):
                 msg_list.append(pprint.pformat(arg))
             else:
                 msg_list.append(str(arg))
-        msg = ''.join(message for message in msg_list)
+
+        msg = msg_list[0] if msg_list else ''
+        for prev, curr in zip(msg_list, msg_list[1:]):
+            if prev.endswith('\n') or curr.startswith('\n'):
+                msg += curr
+            else:
+                msg += ' ' + curr
         caller_info = self.__find_caller()
         script_path = caller_info['script_path']
         line_num = caller_info['line_num']

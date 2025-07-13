@@ -1,4 +1,3 @@
-
 import typing
 import threading
 import queue
@@ -71,7 +70,8 @@ class BoundSignal:
             self.__len_slots_without_priority = 0
 
         if self.__async_exec:
-            self.__thread_async_thread = threading.Thread(target=self.__process_queue, name=f'EventSignal_AsyncThread_{self.__name}', daemon=True)
+            self.__thread_async_thread = threading.Thread(target=self.__process_queue,
+                                                          name=f'EventSignal_AsyncThread_{self.__name}', daemon=True)
             self.__thread_async_thread.start()
 
     def __process_queue(self) -> None:
@@ -97,7 +97,8 @@ class BoundSignal:
         k, v = item
         return k if k >= 0 else self.__len_slots_with_priority + self.__len_slots_without_priority + k
 
-    def __priority_connect(self, slot: typing.Union['EventSignal', 'BoundSignal ', typing.Callable], priority: int) -> None:
+    def __priority_connect(self, slot: typing.Union['EventSignal', 'BoundSignal ', typing.Callable],
+                           priority: int) -> None:
         """
         该函数请务必在self.__thread_lock下使用, 以避免线程安全问题
         """
@@ -152,10 +153,12 @@ class BoundSignal:
         self.__slots_without_priority.clear()
 
     def __copy__(self) -> 'EventSignal':
-        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority, context=self.__context)
+        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority,
+                           context=self.__context)
 
     def __deepcopy__(self, memo: typing.Dict) -> 'EventSignal':
-        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority, context=self.__context)
+        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority,
+                           context=self.__context)
 
     def __str__(self) -> str:
         return f'<Signal BoundSignal(slots:{len(self.__slots)}) {self.__name} at 0x{id(self):016X}>'
@@ -181,7 +184,7 @@ class BoundSignal:
         """
         if path is None:
             path = []
-        full_path = path + [idx+1]
+        full_path = path + [idx + 1]
         path_text = '-'.join(str(i) for i in full_path)
 
         if isinstance(required_type, typing.TypeVar) or required_type == typing.Any:
@@ -217,7 +220,8 @@ class BoundSignal:
         if not isinstance(arg, required_type):
             if type(arg).__name__ == required_type.__name__:
                 return
-            print(arg, required_type, isinstance(arg, required_type), type(arg) == required_type, type(arg), type(required_type))
+            # print(arg, required_type, isinstance(arg, required_type), type(arg) == required_type, type(arg),
+            #       type(required_type))
             required_name = getattr(required_type, '__name__', str(required_type))
             actual_name = type(arg).__name__
             error_text = f'EventSignal "{self.__name}" {path_text}th argument requires "{required_name}", got "{actual_name}" instead.'
@@ -268,7 +272,8 @@ class BoundSignal:
                 self.__priority_disconnect_all()
             return self
 
-    def replace(self, old_slot: typing.Union['EventSignal', typing.Callable], new_slot: typing.Union['EventSignal', typing.Callable]) -> typing.Self:
+    def replace(self, old_slot: typing.Union['EventSignal', typing.Callable],
+                new_slot: typing.Union['EventSignal', typing.Callable]) -> typing.Self:
         with self.__thread_lock:
             if not callable(new_slot):
                 error_text = 'New slot must be callable'
@@ -308,7 +313,7 @@ class BoundSignal:
                 required_types_count = len(self.__types)
                 args_count = len(args)
                 if required_types_count != args_count:
-                    error_text = f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count>1 else ""}, but {args_count} given.'
+                    error_text = f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count > 1 else ""}, but {args_count} given.'
                     raise TypeError(error_text)
                 for arg, (idx, required_type) in zip(args, enumerate(required_types)):
                     self.__check_type(arg, required_type, idx)
@@ -343,7 +348,8 @@ class _BoundSignal(BoundSignal):
     __name__: str = 'EventSignal'
     __qualname__: str = 'EventSignal'
 
-    def __init__(self, types, owner, name, isClassSignal=False, async_exec=False, use_priority=False, context=None) -> None:
+    def __init__(self, types, owner, name, isClassSignal=False, async_exec=False, use_priority=False,
+                 context=None) -> None:
         super().__init__(name, *types, async_exec=async_exec, use_priority=use_priority, context=context)
         self.__owner = owner
         self.__isClassSignal = isClassSignal
@@ -400,7 +406,8 @@ class EventSignal:
         仅可在类体中定义。通过参数 signal_scope 可定义为实例信号或类信号。
     """
 
-    def __init__(self, *types: typing.Union[type, tuple], isClassSignal: bool = False, async_exec: bool = False) -> None:
+    def __init__(self, *types: typing.Union[type, tuple], isClassSignal: bool = False,
+                 async_exec: bool = False) -> None:
         self.__types = types
         self.__isClassSignal = isClassSignal
         self.__async_exec: bool = async_exec
@@ -427,9 +434,14 @@ class EventSignal:
 
     def __handle_class_signal(self, instance_type, context) -> _BoundSignal:
         if not hasattr(instance_type, '__class_signals__'):
-            instance_type.__class_signals__ = {}
+            try:
+                instance_type.__class_signals__ = {}
+            except Exception as e:
+                error_text = f'{type(instance_type).__name__}: Cannot create attribute "__signals__". Error: {e}'
+                error_text = ansi_color_text(error_text, 33)
+                raise AttributeError(error_text)
         if self not in instance_type.__class_signals__:
-            instance_type.__class_signals__[self] = _BoundSignal(
+            __bound_signal = _BoundSignal(
                 self.__types,
                 instance_type,
                 self.__name,
@@ -437,13 +449,24 @@ class EventSignal:
                 async_exec=self.__async_exec,
                 context=context,
             )
+            try:
+                instance_type.__class_signals__[self] = __bound_signal
+            except Exception as e:
+                error_text = f'{type(instance_type).__name__}: Cannot assign signal "{self.__name}" to "__signals__". Error: {e}'
+                error_text = ansi_color_text(error_text, 33)
+                raise AttributeError(error_text)
         return instance_type.__class_signals__[self]
 
     def __handle_instance_signal(self, instance, context) -> _BoundSignal:
         if not hasattr(instance, '__signals__'):
-            instance.__signals__ = {}
+            try:
+                instance.__signals__ = {}
+            except Exception as e:
+                error_text = f'{type(instance).__name__}: Cannot create attribute "__signals__". Error: {e}'
+                error_text = ansi_color_text(error_text, 33)
+                raise AttributeError(error_text)
         if self not in instance.__signals__:
-            instance.__signals__[self] = _BoundSignal(
+            __bound_signal = _BoundSignal(
                 self.__types,
                 instance,
                 self.__name,
@@ -451,6 +474,12 @@ class EventSignal:
                 async_exec=self.__async_exec,
                 context=context,
             )
+            try:
+                instance.__signals__[self] = __bound_signal
+            except Exception as e:
+                error_text = f'{type(instance).__name__}: Cannot assign signal "{self.__name}" to "__signals__". Error: {e}'
+                error_text = ansi_color_text(error_text, 33)
+                raise AttributeError(error_text)
         return instance.__signals__[self]
 
 

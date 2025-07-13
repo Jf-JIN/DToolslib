@@ -24,6 +24,8 @@ class JFTimer(threading.Thread):
                     instance = super().__new__(cls)
                     cls.__timer_dict__[name] = instance
                     instance.__isInitialized__ = False
+                    instance.__isAlived = False
+                    instance.__name = name
         return cls.__timer_dict__[name]
 
     def __init__(self, name: str, interval: int | float = 0, callback: Callable[[], None] | list | tuple | None = None, on_error: Callable[[Exception, str], None] | list | tuple | None = None, daemon: bool = True) -> None:
@@ -80,6 +82,12 @@ class JFTimer(threading.Thread):
         self.__last_deviation: float = 0
         self.__exec_count: int = 0  # 统计执行次数, 实例化后不会再次清零
         self.__exec_duration = 0
+
+    def __repr__(self) -> str:
+        if not self.__isAlived:
+            return f"<JFTimer <" + ansi_color_text(self.__name, 93) + "> has been " + ansi_color_text('terminated', 31, bold=True) + " (initialize required)>"
+        else:
+            return super().__repr__()
 
     @property
     def name(self) -> str:
@@ -317,12 +325,6 @@ class JFTimer(threading.Thread):
         #     ansi_color_text(deviation_diff, 32) + '\t' + ansi_color_text('integral_error', 33) + ':' + ansi_color_text(self.__integral_deviation, 32)
         # print(test_text)
         return para
-
-    def __repr__(self) -> str:
-        if not self.__isAlived:
-            return f"<JFTimer <" + ansi_color_text(self.__name, 93) + "> has been " + ansi_color_text('terminated', 31, bold=True) + " (initialize required)>"
-        else:
-            return super().__repr__()
 
     def __handle_error(self, error: Exception, traceback: str) -> None:
         if self.onError.slot_counts > 0:

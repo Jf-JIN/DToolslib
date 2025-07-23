@@ -1,7 +1,10 @@
+import typing
+
+
 def ansi_color_text(
-    text: str,
-    txt_color: str | None = None,
-    bg_color: str | None = None,
+    text: str | typing.Any,
+    txt_color: int | None = None,
+    bg_color: int | None = None,
     bold: bool = False,
     dim: bool = False,
     italic: bool = False,
@@ -108,7 +111,7 @@ def html_color_text(
     style_list.append('font-style: italic') if italic else ''
     style_list.append('text-decoration: underline') if underline else ''
     style_list.append('opacity: 0.7;animation: blink 1s step-end infinite') if blink else ''
-    style_str: str = ';'.join(item for item in style_list if item)+';'
+    style_str: str = ';'.join(item for item in style_list if item) + ';'
     output_text: str = (f'<span style="{style_str}">{text}</span>').replace('\n', '<br>')
     pre_blick_text = '<style > @keyframes blink{50% {opacity: 50;}}</style>'
     output_text = pre_blick_text + output_text if blink else output_text

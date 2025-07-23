@@ -203,25 +203,29 @@ class BoundSignal:
                     raise TypeError(error_text)
             else:
                 error_text = f'EventSignal "{self.__name}" is missing a context parameter. String types({path_text}th argument "{required_type}") will not be parsed automatically. Please verify the argument types manually.'
-                print(ansi_color_text(error_text, 33))
                 return
 
         elif isinstance(required_type, tuple):
-            if not isinstance(arg, (tuple, list)):
-                error_text = f'EventSignal "{self.__name}" {path_text}th argument expects tuple/list, got {type(arg).__name__}'
-                raise TypeError(error_text)
-            if len(arg) != len(required_type):
-                error_text = f'EventSignal "{self.__name}" {path_text}th  argument expects tuple/list of length {len(required_type)}, got {len(arg)}'
-                raise TypeError(error_text)
-            for sub_idx, sub_type in enumerate(required_type):
-                self.__check_type(arg[sub_idx], sub_type, sub_idx, path=full_path)
+            if idx == 0:
+                if not isinstance(arg, (tuple, list)):
+                    error_text = f'EventSignal "{self.__name}" {path_text}th argument expects tuple/list, got {type(arg).__name__}'
+                    raise TypeError(error_text)
+                if len(arg) != len(required_type):
+                    error_text = f'EventSignal "{self.__name}" {path_text}th  argument expects tuple/list of length {len(required_type)}, got {len(arg)}'
+                    raise TypeError(error_text)
+                for sub_idx, sub_type in enumerate(required_type):
+                    self.__check_type(arg[sub_idx], sub_type, sub_idx, path=full_path)
+            else:
+                if not isinstance(arg, required_type):
+                    error_text = f'EventSignal "{self.__name}" {path_text}th argument expects {required_type}, got {type(arg).__name__}'
+                    raise TypeError(error_text)
             return
 
         if not isinstance(arg, required_type):
             if type(arg).__name__ == required_type.__name__:
                 return
             # print(arg, required_type, isinstance(arg, required_type), type(arg) == required_type, type(arg),
-            #       type(required_type))
+                  # type(required_type))
             required_name = getattr(required_type, '__name__', str(required_type))
             actual_name = type(arg).__name__
             error_text = f'EventSignal "{self.__name}" {path_text}th argument requires "{required_name}", got "{actual_name}" instead.'
@@ -406,7 +410,7 @@ class EventSignal:
         仅可在类体中定义。通过参数 signal_scope 可定义为实例信号或类信号。
     """
 
-    def __init__(self, *types: typing.Union[type, tuple], isClassSignal: bool = False,
+    def __init__(self, *types: typing.Union[type, str, tuple], isClassSignal: bool = False,
                  async_exec: bool = False) -> None:
         self.__types = types
         self.__isClassSignal = isClassSignal

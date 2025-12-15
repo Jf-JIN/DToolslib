@@ -1,43 +1,43 @@
-import typing
-import threading
 import queue
-import time
-import builtins
 import sys
+import threading
+import time
+import weakref
+
 from DToolslib.Color_Text import *
 
 
 class BoundSignal:
     """
     BoundSignal: A thread-safe, optionally asynchronous event signal system.
-    事件信号系统，支持线程安全与可选的异步执行。
+    事件信号系统, 支持线程安全与可选的异步执行.
 
     Supports attribute protection, signal-slot connections, optional slot priorities,
     and safe asynchronous operations across threads.
-    支持属性保护、信号与槽连接、可选的槽函数优先级，以及跨线程的安全异步操作。
+    支持属性保护、信号与槽连接、可选的槽函数优先级, 以及跨线程的安全异步操作.
 
     - Args:
-        - name (str): Signal name. 信号名称。
-        - *types (type or tuple): Types of signal arguments. 信号参数的类型。
-        - async_exec (bool): Whether to emit signals asynchronously. 是否异步发射信号。
-        - use_priority (bool): Whether to call slots in priority order. 是否按优先级调用槽函数。
+        - name (str): Signal name. 信号名称.
+        - *types (type or tuple): Types of signal arguments. 信号参数的类型.
+        - async_exec (bool): Whether to emit signals asynchronously. 是否异步发射信号.
+        - use_priority (bool): Whether to call slots in priority order. 是否按优先级调用槽函数.
 
     - Methods:
         - connect(slot, priority=None):
             Connect a slot (callable) to the signal. Optionally specify priority.
-            连接槽函数，可选指定优先级。
+            连接槽函数, 可选指定优先级.
 
         - disconnect(slot):
             Disconnect a slot from the signal.
-            断开已连接的槽函数。
+            断开已连接的槽函数.
 
         - emit(*args, blocking=False, timeout=None, **kwargs):
             Emit the signal with arguments. If async, can block with timeout.
-            发射信号；若为异步发射，可设置阻塞和超时。
+            发射信号; 若为异步发射, 可设置阻塞和超时.
 
         - replace(old_slot, new_slot):
             Replace a connected slot with a new one.
-            替换已连接的槽函数。
+            替换已连接的槽函数.
 
     - Operator Overloads:
         - `+=`: Same as connect(). 等同于 connect()
@@ -45,7 +45,7 @@ class BoundSignal:
 
     - Note:
         For attribute protection or class-level usage, use EventSignal.
-        如需属性保护或类级使用，请使用 EventSignal 类。
+        如需属性保护或类级使用, 请使用 EventSignal 类.
     """
 
     def __init__(self, name, *types, async_exec=False, use_priority=False, context=None) -> None:
@@ -61,6 +61,7 @@ class BoundSignal:
         self.__use_priority: bool = True if use_priority else False
         self.__context: None | dict = context
         self.__queue_slot = queue.Queue()
+        self.__stop_event = threading.Event()
         self.__thread_lock = threading.Lock()
         self.__slots = []
         if self.__use_priority:
@@ -75,8 +76,11 @@ class BoundSignal:
             self.__thread_async_thread.start()
 
     def __process_queue(self) -> None:
-        while True:
-            params: tuple = self.__queue_slot.get()
+        while not self.__stop_event.is_set():
+            params = self.__queue_slot.get()
+            if params is None:
+                self.__queue_slot.task_done()
+                continue
             slot: typing.Callable = params[0]
             args: tuple = params[1]
             kwargs: dict = params[2]
@@ -135,12 +139,11 @@ class BoundSignal:
 
         该函数运行前提是 self.__slots中存在slot, 故无需检查
         """
-        if slot in self.__slots_with_priority:
-            for key, value in list(self.__slots_with_priority.items()):
-                if value == slot:
-                    del self.__slots_with_priority[key]
-                    break
-        elif slot in self.__slots_without_priority:
+        for key, value in list(self.__slots_with_priority.items()):
+            if value is slot:
+                del self.__slots_with_priority[key]
+                break
+        if slot in self.__slots_without_priority:
             self.__slots_without_priority.remove(slot)
 
     def __priority_disconnect_all(self) -> None:
@@ -152,13 +155,14 @@ class BoundSignal:
         self.__slots_with_priority.clear()
         self.__slots_without_priority.clear()
 
-    def __copy__(self) -> 'EventSignal':
-        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority,
+    def __copy__(self):
+        return BoundSignal(self.__name, *self.__types,
+                           async_exec=self.__async_exec,
+                           use_priority=self.__use_priority,
                            context=self.__context)
 
-    def __deepcopy__(self, memo: typing.Dict) -> 'EventSignal':
-        return BoundSignal(self.__name, self.__types, async_exec=self.__async_exec, use_priority=self.__use_priority,
-                           context=self.__context)
+    def __deepcopy__(self, memo):
+        return self.__copy__()
 
     def __str__(self) -> str:
         return f'<Signal BoundSignal(slots:{len(self.__slots)}) {self.__name} at 0x{id(self):016X}>'
@@ -166,9 +170,11 @@ class BoundSignal:
     def __repr__(self) -> str:
         return f"\n{self.__str__()}\n    - slots:{str(self.__slots)}\n"
 
-    def __del__(self) -> None:
-        if hasattr(self, '__slots'):
-            self.__slots.clear()
+    def __del__(self):
+        try:
+            self.cleanup()
+        except:
+            pass
 
     def __iadd__(self, slot: typing.Union['EventSignal', typing.Callable]) -> typing.Self:
         self.connect(slot)
@@ -190,7 +196,7 @@ class BoundSignal:
         if isinstance(required_type, typing.TypeVar) or required_type == typing.Any:
             return
 
-        # 支持字符串形式的类名（'AClass'）
+        # 支持字符串形式的类名('AClass')
         elif isinstance(required_type, str):
             if self.__context:
                 required_type = self.__context.get(required_type, None)
@@ -225,11 +231,27 @@ class BoundSignal:
             if type(arg).__name__ == required_type.__name__:
                 return
             # print(arg, required_type, isinstance(arg, required_type), type(arg) == required_type, type(arg),
-                  # type(required_type))
+            # type(required_type))
             required_name = getattr(required_type, '__name__', str(required_type))
             actual_name = type(arg).__name__
             error_text = f'EventSignal "{self.__name}" {path_text}th argument requires "{required_name}", got "{actual_name}" instead.'
             raise TypeError(error_text)
+
+    @staticmethod
+    def __wrap_slot(slot):
+        try:
+            return weakref.WeakMethod(slot)  # 绑定方法
+        except TypeError:
+            try:
+                return weakref.ref(slot)  # 普通函数/可调用
+            except TypeError:
+                return slot  # 退回强引用
+
+    @staticmethod
+    def __resolve_slot(ref):
+        if isinstance(ref, weakref.ReferenceType):
+            return ref()  # 失效则返回 None
+        return ref
 
     @property
     def slot_counts(self) -> int:
@@ -243,30 +265,39 @@ class BoundSignal:
                 raise TypeError(error_text)
             if isinstance(slot, (_BoundSignal, BoundSignal)):
                 slot = slot.emit
-
-            if callable(slot):
-                if slot not in self.__slots:
-                    if not self.__use_priority:
-                        self.__slots.append(slot)
-                    else:
-                        self.__priority_connect(slot, priority)
-            else:
+            if not callable(slot):
                 error_text = f'Slot must be callable'
                 raise ValueError(error_text)
+
+            slot_ref = self.__wrap_slot(slot)
+            # 避免重复：对强引用可直接 in，对弱引用需要根据解引用比较
+            for existing in self.__slots:
+                ex = self.__resolve_slot(existing)
+                if ex is slot:
+                    return self  # 已存在
+
+            if not self.__use_priority:
+                self.__slots.append(slot_ref)
+            else:
+                self.__priority_connect(slot_ref, priority)
             return self
 
     def disconnect(self, slot: typing.Union['EventSignal', typing.Callable]) -> typing.Self:
         with self.__thread_lock:
-            if isinstance(slot, (_BoundSignal, BoundSignal)):
+            from_types = (BoundSignal,)
+            if isinstance(slot, from_types):
                 slot = slot.emit
-            if callable(slot):
-                if slot in self.__slots:
-                    self.__slots.remove(slot)
-                    if self.__use_priority:
-                        self.__priority_disconnect(slot)
-            else:
+            if not callable(slot):
                 error_text = 'Slot must be callable'
                 raise ValueError(error_text)
+
+            # 主表删除（按解引用匹配）
+            for i in range(len(self.__slots) - 1, -1, -1):
+                ex = self.__resolve_slot(self.__slots[i])
+                if ex is None or ex is slot:
+                    victim = self.__slots.pop(i)
+                    if self.__use_priority:
+                        self.__priority_disconnect(victim)
             return self
 
     def disconnect_all(self) -> typing.Self:
@@ -280,25 +311,37 @@ class BoundSignal:
                 new_slot: typing.Union['EventSignal', typing.Callable]) -> typing.Self:
         with self.__thread_lock:
             if not callable(new_slot):
-                error_text = 'New slot must be callable'
-                raise ValueError(error_text)
-            if old_slot not in self.__slots:
-                error_text = 'Old slot not found'
-                raise ValueError(error_text)
-            if new_slot in self.__slots:
-                error_text = 'New slot already exists'
-                raise ValueError(error_text)
-            idx_slots_old: int = self.__slots.index(old_slot)
-            self.__slots[idx_slots_old] = new_slot
+                raise ValueError('New slot must be callable')
+            # 找 old_slot
+            idx = -1
+            for i, ref in enumerate(self.__slots):
+                ex = self.__resolve_slot(ref)
+                if ex is old_slot:
+                    idx = i
+                    break
+            if idx == -1:
+                raise ValueError('Old slot not found')
+
+            # 检查重复
+            for ref in self.__slots:
+                ex = self.__resolve_slot(ref)
+                if ex is new_slot:
+                    raise ValueError('New slot already exists')
+
+            new_ref = self.__wrap_slot(new_slot)
+            old_ref = self.__slots[idx]
+            self.__slots[idx] = new_ref
+
             if self.__use_priority:
-                if old_slot in self.__slots_with_priority:
-                    for k, v in self.__slots_with_priority.items():
-                        if v == old_slot:
-                            self.__slots_with_priority[k] = new_slot
-                            break
-                elif old_slot in self.__slots_without_priority:
-                    idx_ls_old: int = self.__slots_without_priority.index(old_slot)
-                    self.__slots_without_priority[idx_ls_old] = new_slot
+                # 同步子结构
+                for k, v in list(self.__slots_with_priority.items()):
+                    if v is old_ref:
+                        self.__slots_with_priority[k] = new_ref
+                        break
+                for j, v in enumerate(list(self.__slots_without_priority)):
+                    if v is old_ref:
+                        self.__slots_without_priority[j] = new_ref
+                        break
             return self
 
     def emit(self, *args, blocking: bool = False, timeout: float | int | None = None, **kwargs) -> None:
@@ -306,46 +349,77 @@ class BoundSignal:
         The blocking and timeout options are only valid if the signal is executed in an asynchronous manner.
         """
         if not isinstance(blocking, bool):
-            error_text = 'Blocking must be a boolean'
-            raise TypeError(error_text)
+            raise TypeError('Blocking must be a boolean')
         if not isinstance(timeout, (float, int, type(None))):
-            error_text = 'Timeout must be a float or int or None'
-            raise TypeError(error_text)
+            raise TypeError('Timeout must be a float or int or None')
+
         with self.__thread_lock:
+            # 类型检查
             if self.__types != ...:
                 required_types = self.__types
-                required_types_count = len(self.__types)
-                args_count = len(args)
-                if required_types_count != args_count:
-                    error_text = f'EventSignal "{self.__name}" requires {required_types_count} argument{"s" if required_types_count > 1 else ""}, but {args_count} given.'
-                    raise TypeError(error_text)
-                for arg, (idx, required_type) in zip(args, enumerate(required_types)):
-                    self.__check_type(arg, required_type, idx)
-            slots = self.__slots
+                if len(required_types) != len(args):
+                    raise TypeError(
+                        f'EventSignal "{self.__name}" requires {len(required_types)} argument'
+                        f'{"s" if len(required_types) > 1 else ""}, but {len(args)} given.'
+                    )
+                for idx, required_type in enumerate(required_types):
+                    self.__check_type(args[idx], required_type, idx)
+
+            # 发射
             done_events = []
-            for slot in slots:
-                if not self.__async_exec:
-                    try:
-                        slot(*args, **kwargs)
-                    except Exception as e:
-                        raise e
-                else:
-                    done_event = threading.Event() if blocking else None
-                    self.__queue_slot.put((slot, args, kwargs, done_event))
-                    if done_event:
-                        done_events.append(done_event)
-            # 阻塞超时检查
-            if blocking and self.__async_exec:
-                start_time = time.time()
-                for event in done_events:
-                    event: threading.Event
-                    remaining = None
-                    if timeout is not None:
-                        elapsed = time.time() - start_time
-                        remaining = max(0, timeout - elapsed)
-                    if not event.wait(timeout=remaining):
-                        error_text = f"Signal '{self.__name}' timed out"
-                        raise TimeoutError(error_text)
+            # 复制当前快照，避免迭代过程中被修改
+            slots_snapshot = list(self.__slots)
+
+            # 发射在锁外执行，降低锁持有时间
+        for slot_ref in slots_snapshot:
+            slot = self.__resolve_slot(slot_ref)
+            if slot is None:
+                # 弱引用已失效：惰性清理
+                with self.__thread_lock:
+                    if slot_ref in self.__slots:
+                        self.__slots.remove(slot_ref)
+                continue
+
+            if not self.__async_exec:
+                slot(*args, **kwargs)
+            else:
+                done_event = threading.Event() if blocking else None
+                self.__queue_slot.put((slot_ref, args, kwargs, done_event))
+                if done_event:
+                    done_events.append(done_event)
+
+        if blocking and self.__async_exec:
+            start_time = time.time()
+            for ev in done_events:
+                remaining = None
+                if timeout is not None:
+                    elapsed = time.time() - start_time
+                    remaining = max(0, timeout - elapsed)
+                if not ev.wait(timeout=remaining):
+                    raise TimeoutError(f"Signal '{self.__name}' timed out")
+
+    def close(self, join_timeout: float | None = None):
+        if getattr(self, "_BoundSignal__async_exec", False) and hasattr(self, "_BoundSignal__thread_async_thread"):
+            if not self.__stop_event.is_set():
+                self.__stop_event.set()
+                try:
+                    self.__queue_slot.put(None)
+                except Exception:
+                    pass
+                try:
+                    self.__thread_async_thread.join(join_timeout or 0)
+                except Exception:
+                    pass
+
+    def cleanup(self):
+        """彻底清理资源"""
+        self.disconnect_all()
+        if hasattr(self, '_BoundSignal__async_exec') and self.__async_exec:
+            self.close(join_timeout=5.0)
+
+        # 清理对owner的引用
+        if hasattr(self, '_BoundSignal__owner_ref'):
+            self.__owner_ref = None
 
 
 class _BoundSignal(BoundSignal):
@@ -355,16 +429,16 @@ class _BoundSignal(BoundSignal):
     def __init__(self, types, owner, name, isClassSignal=False, async_exec=False, use_priority=False,
                  context=None) -> None:
         super().__init__(name, *types, async_exec=async_exec, use_priority=use_priority, context=context)
-        self.__owner = owner
+        self.__owner_ref = weakref.ref(owner)
         self.__isClassSignal = isClassSignal
 
     def __str__(self) -> str:
         owner_repr = (
-            f"class {self.__owner.__name__}"
+            f"class {self.self.__owner_ref().__name__}"
             if self.__isClassSignal
-            else f"{self.__owner.__class__.__name__} object"
+            else f"{self.self.__owner_ref().__class__.__name__} object"
         )
-        return f'<Signal EventSignal(slots:{len(self.__slots)}) {self.__name} of {owner_repr} at 0x{id(self.__owner):016X}>'
+        return f'<Signal EventSignal(slots:{len(self.__slots)}) {self.__name} of {owner_repr} at 0x{id(self.self.__owner_ref()):016X}>'
 
     def __repr__(self) -> str:
         return f"\n{self.__str__()}\n    - slots:{str(self.__slots).replace('_BoundSignal', 'EventSignal')}\n"
@@ -373,42 +447,43 @@ class _BoundSignal(BoundSignal):
 class EventSignal:
     """
     EventSignal: Event signal with attribute protection, asynchronous operation, and thread safety.
-    事件信号，支持属性保护、异步操作，同时线程安全。
+    事件信号, 支持属性保护、异步操作, 同时线程安全.
 
     - Args:
-        - *types (type or tuple): Types of signal arguments. 信号参数的类型。
-        - isClassSignal (bool):  Whether the signal is a class signal. 是否为类级信号。
-            - True: Class signal, shared across instances. 类级信号，多个实例共享。
-            - False (default): Instance signal, bound to each instance. 实例信号，绑定到实例。
-        - async_exec (bool): Whether to emit signals asynchronously. 是否异步发射信号。
-        - use_priority (bool): Whether to call slots in priority order. 是否按优先级调用槽函数。
+        - *types (type or tuple): Types of signal arguments. 信号参数的类型.
+        - isClassSignal (bool):  Whether the signal is a class signal. 是否为类级信号.
+            - True: Class signal, shared across instances. 类级信号, 多个实例共享.
+            - False (default): Instance signal, bound to each instance. 实例信号, 绑定到实例.
+        - async_exec (bool): Whether to emit signals asynchronously. 是否异步发射信号.
+        - use_priority (bool): Whether to call slots in priority order. 是否按优先级调用槽函数.
 
     - Methods:
         - connect(slot, priority=None):
             Connect a slot (callable) to the signal. Optionally specify priority.
-            连接槽函数，可选指定优先级。
+            连接槽函数, 可选指定优先级.
 
         - disconnect(slot):
             Disconnect a slot from the signal.
-            断开已连接的槽函数。
+            断开已连接的槽函数.
 
         - emit(*args, blocking=False, timeout=None, **kwargs):
             Emit the signal with arguments. If async, can block with timeout.
-            发射信号；若为异步发射，可设置阻塞和超时。
+            发射信号; 若为异步发射, 可设置阻塞和超时.
 
         - replace(old_slot, new_slot):
             Replace a connected slot with a new one.
-            替换已连接的槽函数。
+            替换已连接的槽函数.
 
     - Operator Overloads:
-        - `+=`: Equivalent to connect(). 等同于 connect()。
-        - `-=`: Equivalent to disconnect(). 等同于 disconnect()。
+        - `+=`: Equivalent to connect(). 等同于 connect().
+        - `-=`: Equivalent to disconnect(). 等同于 disconnect().
 
     - Note:
         Define in class body only. Supports instance-level and class-level signals
         depending on the 'signal_scope' argument.
-        仅可在类体中定义。通过参数 signal_scope 可定义为实例信号或类信号。
+        仅可在类体中定义. 通过参数 signal_scope 可定义为实例信号或类信号.
     """
+    attrs = ['__signals__', '__weakref__']
 
     def __init__(self, *types: typing.Union[type, str, tuple], isClassSignal: bool = False,
                  async_exec: bool = False) -> None:
@@ -464,7 +539,7 @@ class EventSignal:
     def __handle_instance_signal(self, instance, context) -> _BoundSignal:
         if not hasattr(instance, '__signals__'):
             try:
-                instance.__signals__ = {}
+                instance.__signals__ = weakref.WeakKeyDictionary()
             except Exception as e:
                 error_text = f'{type(instance).__name__}: Cannot create attribute "__signals__". Error: {e}'
                 error_text = ansi_color_text(error_text, 33)
@@ -507,3 +582,35 @@ if __name__ == '__main__':
     print(a.__signals__)  # output: {...} a dict with 2 keys, the values are signal instances. You can also see the slots of the signal.
     print(a.__class_signals__)  # output: {...} a dict with 1 keys, the values are signal instances. You can also see the slots of the signal.
 """
+
+if __name__ == '__main__':
+    import gc
+
+    def test_memory_leak():
+        """测试EventSignal内存泄漏"""
+
+        class TestClass:
+            signal = EventSignal(str, async_exec=True)
+
+        # 创建测试实例
+        def create_test_instance():
+            obj = TestClass()
+            obj.signal.connect(lambda x: print(x))
+            return weakref.ref(obj)
+
+        def test():
+            if weak_ref() is not None:
+                print(f"第{i + 1}次测试：内存泄漏！实例未被释放")
+
+            # 检查BoundSignal实例
+            bound_signals = [obj for obj in gc.get_objects()
+                             if hasattr(obj, '__class__') and 'BoundSignal' in obj.__class__.__name__]
+            print(f"存活BoundSignal数量: {len(bound_signals)}")
+
+        # 多次测试
+        for i in range(100):
+            weak_ref = create_test_instance()
+            gc.collect()  # 强制垃圾回收
+            test()
+
+    test_memory_leak()

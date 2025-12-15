@@ -40,7 +40,7 @@ if QThread is None:
 
 
 def _get_current_process_name() -> str:
-    """ 
+    """
     This function returns the name of the current process.
     """
     python_process_name = multiprocessing.current_process().name
@@ -54,7 +54,7 @@ def _get_current_process_name() -> str:
 
 
 class JFLogger(object):
-    """ 
+    """
     The main class of the logger.
 
     - Args:
@@ -73,7 +73,7 @@ class JFLogger(object):
         - signal_colorized: formatted log messages with color
         - signal_message: log messages without color and format
 
-        parameter of slot function: 
+        parameter of slot function:
             - level_str(str): `LogLevel.TRACE`, `LogLevel.DEBUG`, `LogLevel.INFO`, `LogLevel.WARNING`, `LogLevel.ERROR`, `LogLevel.CRITICAL`
             - message(str)
 
@@ -738,7 +738,7 @@ class JFLogger(object):
                 self.__current_day = datetime.today().date()
                 file_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 start_time = self.__start_time_log.strftime('%Y-%m-%d %H:%M:%S')
-                message = f"""{'#'*66}\n# <start time> This Program is started at\t {start_time}.\n# <file time> This log file is created at\t {file_time}.\n{'#'*66}\n\n{message}"""
+                message = f"""{'#'*66}\n# <start time> This Program is started at\t {start_time}.\n# <file  time> This log file is created at\t {file_time}.\n{'#'*66}\n\n{message}"""
                 self.__current_size = len(message.encode('utf-8'))
                 self.__run_async_rotated_log_compression()
             # Prevent folders from being deleted accidentally before writing
@@ -848,7 +848,7 @@ class JFLogger(object):
 
         Format: `traceback_message` + `message`
 
-        You can specify the log level of the exception message, default is ERROR.        
+        You can specify the log level of the exception message, default is ERROR.
         """
         if self.__enableTracebackException:
             exception_str = traceback.format_exc()
@@ -874,7 +874,7 @@ class JFLogger(object):
             self.error(exception_str, *args, **kwargs)
 
     def set_listen_logging(self, logger_name: str = '', level: LogLevel = LogLevel.NOTSET) -> typing.Self:
-        """ 
+        """
         Set logging listener
 
         -Args:
@@ -901,7 +901,7 @@ class JFLogger(object):
         return self
 
     def set_exclude_funcs(self, funcs_list: list) -> typing.Self:
-        """ 
+        """
         Set the functions to be excluded
 
         - Args:
@@ -915,7 +915,7 @@ class JFLogger(object):
         return self
 
     def set_exclude_classes(self, classes_list: list) -> typing.Self:
-        """ 
+        """
         Set the classes to be excluded
 
         - Args:
@@ -933,7 +933,7 @@ class JFLogger(object):
         return self
 
     def set_exclude_modules(self, modules_list: list) -> typing.Self:
-        """ 
+        """
         Set the modules to be excluded
 
         - Args:
@@ -946,7 +946,7 @@ class JFLogger(object):
         return self
 
     def add_exclude_func(self, func_name: str) -> typing.Self:
-        """ 
+        """
         Add the function to be excluded
 
         - Args:
@@ -956,7 +956,7 @@ class JFLogger(object):
         return self
 
     def add_exclude_class(self, cls_name: str) -> typing.Self:
-        """ 
+        """
         Add the class to be excluded
 
         - Args:
@@ -966,7 +966,7 @@ class JFLogger(object):
         return self
 
     def add_exclude_module(self, module_name: str) -> typing.Self:
-        """ 
+        """
         Add the module to be excluded
 
         - Args:
@@ -976,7 +976,7 @@ class JFLogger(object):
         return self
 
     def remove_exclude_func(self, func_name: str) -> typing.Self:
-        """ 
+        """
         Remove the function to be excluded
 
         - Args:
@@ -986,7 +986,7 @@ class JFLogger(object):
         return self
 
     def remove_exclude_class(self, cls_name: str) -> typing.Self:
-        """ 
+        """
         Remove the class to be excluded
 
         - Args:
@@ -996,7 +996,7 @@ class JFLogger(object):
         return self
 
     def remove_exclude_module(self, module_name: str) -> typing.Self:
-        """ 
+        """
         Remove the module to be excluded
 
         - Args:
@@ -1006,7 +1006,7 @@ class JFLogger(object):
         return self
 
     def set_root_dir(self, root_dir: str) -> typing.Self:
-        """ 
+        """
         Set the root directory for the log files
 
         - Args:
@@ -1022,7 +1022,7 @@ class JFLogger(object):
         return self
 
     def set_root_folder_name(self, root_folder_name: str) -> typing.Self:
-        """ 
+        """
         Set log root folder name
 
         - Args:
@@ -1037,7 +1037,7 @@ class JFLogger(object):
         return self
 
     def set_log_folder_name(self, log_folder_name: str) -> typing.Self:
-        """ 
+        """
         Set log folder name
 
         - Args:
@@ -1057,7 +1057,7 @@ class JFLogger(object):
         return self
 
     def set_level(self, log_level: LogLevel) -> typing.Self:
-        """ 
+        """
         Set log level
 
         - Args:
@@ -1067,7 +1067,7 @@ class JFLogger(object):
         return self
 
     def set_enable_daily_split(self, enable: bool) -> typing.Self:
-        """ 
+        """
         Set whether to enable daily split log
 
         - Args:
@@ -1077,7 +1077,7 @@ class JFLogger(object):
         return self
 
     def set_enable_console_output(self, enable: bool) -> typing.Self:
-        """ 
+        """
         Set whether to enable console output
 
         - Args:
@@ -1087,7 +1087,7 @@ class JFLogger(object):
         return self
 
     def set_enable_file_output(self, enable: bool) -> typing.Self:
-        """ 
+        """
         Set whether to enable file output
 
         - Args:
@@ -1097,7 +1097,7 @@ class JFLogger(object):
         return self
 
     def set_enable_runtime_zip(self, enable: bool) -> typing.Self:
-        """ 
+        """
         Set whether to compress log files at runtime
 
         - Args:
@@ -1117,7 +1117,7 @@ class JFLogger(object):
     #     return self
 
     def set_file_size_limit_kB(self, size_limit: typing.Union[int, float]) -> typing.Self:
-        """ 
+        """
         Set a single log file size limit
 
         - Args:
@@ -1130,7 +1130,7 @@ class JFLogger(object):
         return self
 
     def set_file_count_limit(self, count_limit: int, isStict: bool = False) -> typing.Self:
-        """ 
+        """
         Set the limit on the number of log files in the folder
 
         - Args:
@@ -1148,7 +1148,7 @@ class JFLogger(object):
         return self
 
     def set_file_days_limit(self, days_limit: int, isStict: bool = False) -> typing.Self:
-        """ 
+        """
         Set the limit on the number of days of log files in the folder
 
         - Args:
@@ -1166,7 +1166,7 @@ class JFLogger(object):
         return self
 
     def set_enable_continue_with_last_file(self, enable: bool) -> typing.Self:
-        """ 
+        """
         Set whether to continue writing to the last log file
 
         - Args:
@@ -1183,7 +1183,7 @@ class JFLogger(object):
         return self
 
     def set_message_format(self, message_format: str) -> typing.Self:
-        """ 
+        """
         Set log message format
 
         - Args:

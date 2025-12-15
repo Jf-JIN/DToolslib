@@ -257,7 +257,7 @@ class JFTimer(threading.Thread):
             self.__stop_event.set()
             self.__sleep_event.clear()
         else:
-            print(ansi_color_text("Timer is already started", 93))
+            print(ansi_color_text(f"Timer <{self.__name}>  is already started", 93))
 
     def stop(self) -> None:
         """

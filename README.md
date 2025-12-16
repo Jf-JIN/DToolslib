@@ -24,6 +24,19 @@ An enumeration library, supported
 ###### How to use | 使用方法
 
 ```python
+[Parameters]:
+- enable_repeatable: 
+    Whether enum values are allowed to be repeated. 是否允许枚举值重复
+- enable_member_attribute: 
+    Whether to allow enum members to have attributes. 是否允许枚举成员可以带属性
+- enable_member_extension: 
+    Whether to allow enum members to extend outside the definition of the enum class. 是否允许枚举成员在枚举类的定义外部扩展
+- enum_value_mode: 
+      Enum values replace the assignment pattern. 枚举值替换赋值模式
+        0: (Default) Do not replace  (默认) 不替换
+        1: Replace with integer enumeration value 替换为整数型枚举值
+        2: Replace with integer string 替换为整数字符串
+
 class TestEnum(StaticEnum, enable_member_attribute=True):
     A = '#ff0000'
     A.color_name = 'Red'
@@ -177,6 +190,10 @@ Interior Decorators
                     获取调用树
 
 # 版本信息 Version Info
+#### v2.4.17
+* Improve the StaticEnum non-repeatable assignment, and improve the assignment duplication check when quoting a value
+    完善 StaticEnum 不可重复赋值, 完善引用赋值时的赋值重复检查
+
 #### v1.0.0.0
 * Refactored the StaticEnum class and added setting function
         重构了 StaticEnum 类, 增加了设置功能
@@ -251,4 +268,3 @@ Interior Decorators
         修复 StaticEnum 可在外部新增属性的问题, 以及内部多层嵌套类的数据类型错误的 bug. 
 * Modified the way data types are converted in the StaticEnum metaclass, changed from the previous eval to created with the class.
         更改了 StaticEnum 元类中转换数据类型的方式, 从之前的eval更改为用类创建. 
-

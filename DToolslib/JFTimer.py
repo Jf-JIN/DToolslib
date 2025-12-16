@@ -8,9 +8,6 @@ from DToolslib.Color_Text import *
 
 
 class JFTimer(threading.Thread):
-    """
-
-    """
     timeout = EventSignal()
     onError = EventSignal(Exception, str)
     terminated = EventSignal()

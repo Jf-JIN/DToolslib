@@ -10,6 +10,7 @@
 __all__ = ['StaticEnum']
 
 import json
+import sys
 
 from .Color_Text import ansi_color_text
 
@@ -52,7 +53,7 @@ class _itemBase:
             return
         if key == f'_{self.__class__.__name__}__attr_lock' and hasattr(self,
                                                                        f'_{self.__class__.__name__}__attr_lock') and getattr(
-                self, f'_{self.__class__.__name__}__attr_lock'):
+            self, f'_{self.__class__.__name__}__attr_lock'):
             return
         if (key in self.__dict__ and key != f'_{self.__class__.__name__}__attr_lock') or (
                 hasattr(self, f'_{self.__class__.__name__}__attr_lock')):
@@ -106,29 +107,32 @@ class _SEByteArray(bytes, _itemBase):
 
 
 _static_enum_dict = {
-    int: _SEInteger,
-    float: _SEFloat,
-    str: _SEString,
-    list: _SEList,
-    tuple: _SETuple,
-    set: _SESet,
+    int      : _SEInteger,
+    float    : _SEFloat,
+    str      : _SEString,
+    list     : _SEList,
+    tuple    : _SETuple,
+    set      : _SESet,
     frozenset: _SEFrozenSet,
-    dict: _SEDictionary,
-    complex: _SEComplexNumber,
-    bytes: _SEBytes,
+    dict     : _SEDictionary,
+    complex  : _SEComplexNumber,
+    bytes    : _SEBytes,
     bytearray: _SEByteArray
 }
 
 
 class _StaticEnumDict(dict):
-    def __init__(self, enable_member_attribute: bool, enable_member_extension: bool, enum_value_mode: int) -> None:
+    def __init__(self, enable_repeatable: bool, enable_member_attribute: bool, enable_member_extension: bool,
+                 enum_value_mode: int) -> None:
         super().__init__()
         self._cls_name = None
         self._member_names: dict = {}
+        self._enable_repeatable: bool = enable_repeatable
         self._enable_member_attribute: bool = enable_member_attribute
         self._enable_member_extension: bool = enable_member_extension
-        self._enum_value_mode: bool = enum_value_mode
+        self._enum_value_mode: int = enum_value_mode
         self._int_enums: dict = {}
+        self.__setitem__('__enable_repeatable__', self._enable_repeatable)
         self.__setitem__('__enable_member_attribute__', self._enable_member_attribute)
         self.__setitem__('__enable_member_extension__', self._enable_member_extension)
         self.__setitem__('__enum_value_mode__', self._enum_value_mode)
@@ -158,25 +162,27 @@ class _StaticEnumDict(dict):
 
 class _StaticEnumMeta(type):
     @classmethod
-    def __prepare__(metacls, cls, bases, enable_member_attribute: bool = False, enable_member_extension: bool = False,
+    def __prepare__(metacls, cls, bases, enable_repeatable: bool = False, enable_member_attribute: bool = False,
+                    enable_member_extension: bool = False,
                     enum_value_mode: bool = False, *args, **kwargs) -> _StaticEnumDict:
         # print(f'prepare - {cls}: {enable_member_attribute}, {enable_member_extension}, {enum_value_mode}')
         if (enable_member_attribute or enable_member_extension) and enum_value_mode != 0:
             warning_text = ansi_color_text(
                 f'<StaticEnum -> {cls}> enable_member_attribute and enum_value_mode are mutually exclusive, please choose one. Otherwise, the enable_member_attribute will be invalid.',
                 33)
-            print(warning_text)
+            sys.stdout.write(warning_text)
         if enable_member_extension and not enable_member_attribute:
             warning_text = ansi_color_text(
                 f'<StaticEnum -> {cls}> befor enable_member_attribute, please enable enable_member_extension first. Otherwise, the enable_member_attribute will be invalid.',
                 33)
-            print(warning_text)
-        enum_dict = _StaticEnumDict(enable_member_attribute, enable_member_extension, enum_value_mode)
+            sys.stdout.write(warning_text)
+        enum_dict = _StaticEnumDict(enable_repeatable, enable_member_attribute, enable_member_extension,
+                                    enum_value_mode)
         enum_dict._cls_name = cls
         return enum_dict
 
     def __new__(mcs, name, bases, dct: dict, *args, **kwargs):
-        def _get_enum_int_value(cls, key, value, isInt=True) -> int:
+        def _get_enum_int_value(cls, key, value, isInt=True) -> int | str:
             if hasattr(value, '__qualname__') and "." in value.__qualname__:
                 return value
             ori_lock_status = cls.__SE_members__['isAllowedSetValue']
@@ -192,44 +198,8 @@ class _StaticEnumMeta(type):
                         cls.__SE_members__['isAllowedSetValue'] = ori_lock_status
                         return str(cls.__enum_int_num__)
 
-        # def _convert_to_enum_item(cls, key, value, enable_member_attribute: bool, enable_member_extension: bool, enum_value_mode: bool, *args, **kwargs) -> None:
-        #     cls_dict = dict(value.__dict__)
-        #     cls_dict['__enable_member_attribute__'] = enable_member_attribute
-        #     cls_dict['__enable_member_extension__'] = enable_member_extension
-        #     cls_dict['__enum_value_mode__'] = enum_value_mode
-        #     cls_dict['__int_enums__'] = {}
-        #     cls_dict['__enum_int_num__'] = -1
-        #     cls_dict['__SE_members__'] = {
-        #         'isAllowedSetValue': False,  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
-        #         'data': {}  # 用于存储枚举项的值
-        #     }
-        #     for sub_key, sub_value in cls_dict.items():
-        #         sub_key: str
-        #         sub_value: str
-        #         if isinstance(sub_value, type) and not issubclass(sub_value, StaticEnum) and sub_value is not value:
-        #             # 条件: sub_value 是一个类 && 非 StaticEnum 子类 && 不是当前枚举类
-        #             # 作用替换未显示继承 StaticEnum 的子类为 StaticEnum 子类
-        #             _convert_to_enum_item(sub_value, sub_key, sub_value, enable_member_attribute, enable_member_extension, enum_value_mode)
-        #         if enable_member_attribute and sub_key not in _object_attr and not (sub_key.startswith('__') and sub_key.endswith('__')) and type(sub_value) in _static_enum_dict:
-        #             # 条件: 允许使用枚举项属性 && 不是对象属性 && 不是魔术属性 && 子类型属于常规数据类型
-        #             if enum_value_mode == 1:
-        #                 sub_value = _get_enum_int_value(cls, sub_key, sub_value, isInt=True)
-        #             elif enum_value_mode == 2:
-        #                 sub_value = _get_enum_int_value(cls, sub_key, sub_value, isInt=False)
-        #             cls_dict[sub_key] = _static_enum_dict[type(sub_value)](sub_value)
-        #             cls_dict[sub_key].name = sub_key
-        #     new_cls = _StaticEnumMeta(
-        #         value.__name__,
-        #         (StaticEnum,),
-        #         cls_dict
-        #     )
-        #     if not hasattr(cls, '__SE_members__'):
-        #         cls.__SE_members__ = {
-        #             'isAllowedSetValue': False,
-        #             'data': {}
-        #         }
-        #     cls.__SE_members__['data'][key] = new_cls
         def _convert_to_enum_item(root_cls, key, value,
+                                  enable_repeatable: bool,
                                   enable_member_attribute: bool,
                                   enable_member_extension: bool,
                                   enum_value_mode: int,
@@ -239,6 +209,7 @@ class _StaticEnumMeta(type):
             cls_dict.pop('__weakref__', None)
             cls_dict['__module__'] = value.__module__
             cls_dict['__qualname__'] = f'{root_cls.__qualname__}.{key}'
+            cls_dict['__enable_repeatable__'] = enable_repeatable
             cls_dict['__enable_member_attribute__'] = enable_member_attribute
             cls_dict['__enable_member_extension__'] = enable_member_extension
             cls_dict['__enum_value_mode__'] = enum_value_mode
@@ -246,7 +217,8 @@ class _StaticEnumMeta(type):
             cls_dict['__enum_int_num__'] = -1
             cls_dict['__SE_members__'] = {
                 'isAllowedSetValue': False,
-                'data': {}
+                'data'             : {},
+                're_data'          : {},
             }
 
             for sub_key, sub_value in list(cls_dict.items()):
@@ -281,7 +253,11 @@ class _StaticEnumMeta(type):
             )
 
             if not hasattr(root_cls, '__SE_members__'):
-                root_cls.__SE_members__ = {'isAllowedSetValue': False, 'data': {}}
+                root_cls.__SE_members__ = {
+                    'isAllowedSetValue': False,
+                    'data'             : {},
+                    're_data'          : {},
+                }
             ori_lock = root_cls.__SE_members__['isAllowedSetValue']
             root_cls.__SE_members__['isAllowedSetValue'] = True
             try:
@@ -305,7 +281,8 @@ class _StaticEnumMeta(type):
             return super().__new__(mcs, name, bases, dct)
         dct['__SE_members__'] = {  # 用于存储枚举项的字典
             'isAllowedSetValue': False,  # 用于允许赋值枚举项的标志, 允许内部赋值, 禁止外部赋值
-            'data': {}  # 用于存储枚举项的值
+            'data'             : {},  # 用于存储枚举项的值
+            're_data'          : {},
         }
 
         members = {key: value for key, value in dct.items() if not key.startswith('__')}
@@ -314,7 +291,7 @@ class _StaticEnumMeta(type):
             if key == 'isAllowedSetValue' or key == '__SE_members__':
                 continue
             elif isinstance(value, type) and not issubclass(value, StaticEnum) and value is not cls:
-                _convert_to_enum_item(cls, key, value, dct['__enable_member_attribute__'],
+                _convert_to_enum_item(cls, key, value, dct['__enable_repeatable__'], dct['__enable_member_attribute__'],
                                       dct['__enable_member_extension__'], dct['__enum_value_mode__'])
                 continue
             cls.__SE_members__['isAllowedSetValue'] = True
@@ -340,15 +317,29 @@ class _StaticEnumMeta(type):
                 else:
                     match_text = ansi_color_text(f'{name} -> {key}: {value}', 36)
                     error_text = ansi_color_text(f'Warning: ', 33) + match_text + \
-                        ansi_color_text(
-                        '\nStaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.\n',
-                        33)
-                    print(error_text)
+                                 ansi_color_text(
+                                     '\nStaticEnum only supports int type members without default values. For other types, please assign a default value explicitly.\n',
+                                     33)
+                    sys.stdout.write(error_text)
             cls.__SE_members__['isAllowedSetValue'] = ori_lock_status
         if cls.__enable_member_attribute__ and cls.__enable_member_extension__:
             _recursion_set_attr_lock(cls)
         cls.__SE_members__['isAllowedSetValue'] = False
+
+        for k, v in cls.__SE_members__['re_data'].items():
+            if len(v) > 1:
+                key_value_str = ', '.join([f'{var}={k}' for var in v])
+                error_text = f'Repeat key-value pairs: {key_value_str}'
+                raise TypeError(ansi_color_text(error_text, 33))
         return cls
+
+    @classmethod
+    def __is_hashable(cls, obj) -> bool:
+        try:
+            hash(obj)
+            return True
+        except TypeError:
+            return False
 
     def __setattr__(cls, key, value):
         if key in cls.__SE_members__['data'] and not cls.__SE_members__['isAllowedSetValue']:
@@ -359,9 +350,13 @@ class _StaticEnumMeta(type):
                 cls.__SE_members__['isAllowedSetValue']:
             error_text = f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.'
             raise TypeError(ansi_color_text(error_text, 33))
+        if key in cls.__SE_members__['data'] and cls.__is_hashable(value) and not cls.__enable_repeatable__:
+            if value not in cls.__SE_members__['re_data']:
+                cls.__SE_members__['re_data'][value] = []
+            cls.__SE_members__['re_data'][value].append(key)
         super().__setattr__(key, value)
 
-    def __repr__(cls):
+    def __str__(cls):
         items = list(cls.__SE_members__['data'].items())
         header = f"\n<StaticEnum> '{cls.__module__}.{cls.__name__}'"
         lines = [ansi_color_text(header, txt_color=33)]
@@ -375,6 +370,9 @@ class _StaticEnumMeta(type):
             lines.append(f"{index:<5} | {type_t:<15} | {key:<30} | {value}")
         return "\n".join(lines) + '\n'
 
+    def __repr__(cls):
+        return f'{cls.__name__}: {cls.__SE_members__["data"]}'
+
     def __iter__(cls):
         return iter(cls.__SE_members__['data'].values())
 
@@ -382,7 +380,8 @@ class _StaticEnumMeta(type):
         return item in self.__SE_members__['data'].keys()
 
 
-class StaticEnum(metaclass=_StaticEnumMeta, enable_member_attribute=False, enable_member_extension=False,
+class StaticEnum(metaclass=_StaticEnumMeta, enable_repeatable=False, enable_member_attribute=False,
+                 enable_member_extension=False,
                  enum_value_mode=0):
     """
     StaticEnum is a static enumeration class with enhanced enum member capabilities,

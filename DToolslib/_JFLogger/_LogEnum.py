@@ -3,7 +3,7 @@ from DToolslib.Color_Text import *
 import typing
 
 
-class LogLevel(StaticEnum):
+class LogLevel(StaticEnum, enable_repeatable=True):
     """ Log level enumeration class """
     NOTSET = 0
     TRACE = 10

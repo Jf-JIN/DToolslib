@@ -162,7 +162,7 @@ class _StaticEnumDict(dict):
 
 class _StaticEnumMeta(type):
     @classmethod
-    def __prepare__(metacls, cls, bases, enable_repeatable: bool = False, enable_member_attribute: bool = False,
+    def __prepare__(metacls, cls, bases, enable_repeatable: bool = True, enable_member_attribute: bool = False,
                     enable_member_extension: bool = False,
                     enum_value_mode: bool = False, *args, **kwargs) -> _StaticEnumDict:
         # print(f'prepare - {cls}: {enable_member_attribute}, {enable_member_extension}, {enum_value_mode}')
@@ -229,6 +229,7 @@ class _StaticEnumMeta(type):
                         root_cls,
                         sub_key,
                         sub_value,
+                        enable_repeatable,
                         enable_member_attribute,
                         enable_member_extension,
                         enum_value_mode
@@ -381,7 +382,7 @@ class _StaticEnumMeta(type):
         return item in self.__SE_members__['data'].keys()
 
 
-class StaticEnum(metaclass=_StaticEnumMeta, enable_repeatable=False, enable_member_attribute=False,
+class StaticEnum(metaclass=_StaticEnumMeta, enable_repeatable=True, enable_member_attribute=False,
                  enable_member_extension=False,
                  enum_value_mode=0):
     """

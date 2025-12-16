@@ -351,9 +351,10 @@ class _StaticEnumMeta(type):
             error_text = f'Addition of the member "{key}" in the "{cls.__name__}" enumeration is not allowed.'
             raise TypeError(ansi_color_text(error_text, 33))
         if key in cls.__SE_members__['data'] and cls.__is_hashable(value) and not cls.__enable_repeatable__:
-            if value not in cls.__SE_members__['re_data']:
-                cls.__SE_members__['re_data'][value] = []
-            cls.__SE_members__['re_data'][value].append(key)
+            if value is not None and not isinstance(value, bool):
+                if value not in cls.__SE_members__['re_data']:
+                    cls.__SE_members__['re_data'][value] = []
+                cls.__SE_members__['re_data'][value].append(key)
         super().__setattr__(key, value)
 
     def __str__(cls):

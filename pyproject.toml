@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "DToolslib"
-version = "2.5.0"
+version = "2.5.1"
 description = "A simple and miscellaneous utility library containing multiple utility scripts. 一个简单且杂的工具库, 包含多个工具脚本"
 authors = [{ name = "Jf-JIN" }]
 readme = "README.md"
@@ -51,7 +51,7 @@ Documentation = "https://github.com/Jf-JIN/DToolslib/wiki"
 
 # 包包含配置
 [tool.setuptools]
-packages = ["DToolslib","DToolslib.Inner_Decorators", "DToolslib._JFLogger"]
+packages = ["DToolslib","DToolslib.Inner_Decorators", "DToolslib._JFLogger", "DToolslib._Event_Signal"]
 # package-dir = { "" = "" }
 
 # 包含数据文件

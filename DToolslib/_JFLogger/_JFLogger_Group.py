@@ -353,11 +353,11 @@ class JFLoggerGroup(object):
             self.__log_dir: str = os.path.join(self.__root_path, _Log_Default.GROUP_FOLDER_NAME)
             if not os.path.exists(self.__log_dir):
                 os.makedirs(self.__log_dir)
-            self.__log_file_path: str = os.path.join(self.__log_dir, f'Global_Log-[{self.__start_time_format}]--0.log')
+            self.__log_file_path: str = os.path.join(self.__log_dir, f'Global_Log-[{self.__start_time_format}]-[{os.getppid()}-{os.getpid()}]--0.log')
             if os.path.exists(self.__log_file_path):
                 index = 1
                 while True:
-                    self.__log_file_path = os.path.join(self.__log_dir, f'Global_Log-[{self.__start_time_format}]_{index}--0.log')
+                    self.__log_file_path = os.path.join(self.__log_dir, f'Global_Log-[{self.__start_time_format}]-[{os.getppid()}-{os.getpid()}]_{index}--0.log')
                     if not os.path.exists(self.__log_file_path):
                         break
                     index += 1

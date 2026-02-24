@@ -20,7 +20,6 @@ from ._LogEnum import LogLevel, LogHighlightType, _ColorMap, _Log_Default, _LogM
 from ._Logging_Listener import _LoggingListener
 from ._Compressed_Thread import _CompressThread
 
-
 try:
     from PyQt5.QtCore import QThread
 except:
@@ -277,7 +276,7 @@ class JFLogger(object):
         log_level: typing.Union[str, int] = LogLevel.INFO,
         enableConsoleOutput: bool = True,
         enableFileOutput: bool = True,
-        ** kwargs,
+        **kwargs,
     ) -> None:
         self.__log_name = log_name
         self.__root_folder_name = root_folder_name if root_folder_name else _Log_Default.ROOT_FOLDER_NAME
@@ -287,21 +286,28 @@ class JFLogger(object):
         self.__root_dir: str = root_dir
         self.__root_path: str = os.path.join(self.__root_dir, self.__root_folder_name) if self.__root_dir else ''
         self.__isExistsPath = False
-        if self.__root_dir and os.path.exists(self.__root_dir):
+        if self.__root_dir:
+            if not os.path.exists(self.__root_dir):
+                try:
+                    os.makedirs(self.__root_dir)
+                except FileNotFoundError:
+                    error_text = ansi_color_text(f'<ERROR> Log root dir "{self.__root_dir}" does not exist.', 33)
+                    raise FileNotFoundError(error_text)
+                except Exception as e:
+                    raise e
             self.__isExistsPath = True
-        elif self.__root_dir:
-            error_text = ansi_color_text(f'<ERROR> Log root dir "{self.__root_dir}" does not exist.', 33)
-            raise FileNotFoundError(error_text)
         else:
             warning_text = (
-                ansi_color_text('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
-                ansi_color_text(self.__log_name+'\n   ', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
-                ansi_color_text(
-                    f'- No log file will be recorded because the log root path is not specified. The current root path input is "{self.__root_path}". Type: {type(self.__root_path)}', txt_color=_ColorMap.YELLOW.ANSI_TXT)
+                    ansi_color_text('< WARNING > No File Output from', _ColorMap.LIGHTYELLOW.ANSI_TXT) +
+                    ansi_color_text(self.__log_name + '\n   ', _ColorMap.LIGHTYELLOW.ANSI_TXT, _ColorMap.GRAY.ANSI_BG) +
+                    ansi_color_text(
+                        f'- No log file will be recorded because the log root path is not specified. The current root path input is "{self.__root_path}". Type: {type(self.__root_path)}',
+                        txt_color=_ColorMap.YELLOW.ANSI_TXT)
             )
             if sys.stdout:
                 sys.stdout.write(warning_text)
-        self.__log_folder_name = log_folder_name if isinstance(log_folder_name, str) and log_folder_name else self.__log_name
+        self.__log_folder_name = log_folder_name if isinstance(log_folder_name,
+                                                               str) and log_folder_name else self.__log_name
         self.__log_dir = os.path.join(self.__root_path, self.__log_folder_name)
         if self.__log_folder_name in self.__class__.__log_folder_name_list__:
             error_text = ansi_color_text(f'<ERROR> Log folder name "{self.__log_folder_name}" is already in use.', 33)
@@ -362,19 +368,29 @@ class JFLogger(object):
         self.__start_time_log = datetime.now()
         self.__zip_file_path = ''
         self.__var_dict: dict = {
-            'logName': _LogMessageItem('logName', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'asctime': _LogMessageItem('asctime', font_color=_ColorMap.GREEN, highlight_type=self.__highlight_type, bold=True),
-            'processName': _LogMessageItem('processName', font_color=_ColorMap.YELLOW, highlight_type=self.__highlight_type),
-            'threadName': _LogMessageItem('threadName', font_color=_ColorMap.YELLOW, highlight_type=self.__highlight_type),
-            'moduleName': _LogMessageItem('moduleName', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'functionName': _LogMessageItem('functionName', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'className': _LogMessageItem('className', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'levelName': _LogMessageItem('levelName', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'lineNum': _LogMessageItem('lineNum', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'message': _LogMessageItem('message'),
-            'scriptName': _LogMessageItem('scriptName', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'scriptPath': _LogMessageItem('scriptPath', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
-            'consoleLine': _LogMessageItem('consoleLine', font_color=_ColorMap.RED, highlight_type=self.__highlight_type, italic=True),
+            'logName'     : _LogMessageItem('logName', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
+            'asctime'     : _LogMessageItem('asctime', font_color=_ColorMap.GREEN, highlight_type=self.__highlight_type,
+                                            bold=True),
+            'processName' : _LogMessageItem('processName', font_color=_ColorMap.YELLOW,
+                                            highlight_type=self.__highlight_type),
+            'threadName'  : _LogMessageItem('threadName', font_color=_ColorMap.YELLOW,
+                                            highlight_type=self.__highlight_type),
+            'moduleName'  : _LogMessageItem('moduleName', font_color=_ColorMap.CYAN,
+                                            highlight_type=self.__highlight_type),
+            'functionName': _LogMessageItem('functionName', font_color=_ColorMap.CYAN,
+                                            highlight_type=self.__highlight_type),
+            'className'   : _LogMessageItem('className', font_color=_ColorMap.CYAN,
+                                            highlight_type=self.__highlight_type),
+            'levelName'   : _LogMessageItem('levelName', font_color=_ColorMap.CYAN,
+                                            highlight_type=self.__highlight_type),
+            'lineNum'     : _LogMessageItem('lineNum', font_color=_ColorMap.CYAN, highlight_type=self.__highlight_type),
+            'message'     : _LogMessageItem('message'),
+            'scriptName'  : _LogMessageItem('scriptName', font_color=_ColorMap.CYAN,
+                                            highlight_type=self.__highlight_type),
+            'scriptPath'  : _LogMessageItem('scriptPath', font_color=_ColorMap.CYAN,
+                                            highlight_type=self.__highlight_type),
+            'consoleLine' : _LogMessageItem('consoleLine', font_color=_ColorMap.RED,
+                                            highlight_type=self.__highlight_type, italic=True),
         }
         for key, value in self.__kwargs.items():
             if key not in self.__var_dict:
@@ -396,23 +412,33 @@ class JFLogger(object):
         self.__current_day = datetime.today().date()
         self.__isNewFile = True
         self.__level_color_dict: dict = {
-            LogLevel.NOTSET: _LogMessageItem('levelName', text='NOTSET', font_color=_ColorMap.LIGHTBLUE, highlight_type=self.__highlight_type),
-            LogLevel.TRACE: _LogMessageItem('levelName', text='TRACE', font_color=_ColorMap.LIGHTGREEN, highlight_type=self.__highlight_type),
-            LogLevel.DEBUG: _LogMessageItem('levelName', text='DEBUG', font_color=_ColorMap.BLACK, background_color=_ColorMap.LIGHTGREEN, highlight_type=self.__highlight_type),
-            LogLevel.INFO: _LogMessageItem('levelName', text='INFO', font_color=_ColorMap.BLUE, highlight_type=self.__highlight_type),
-            LogLevel.WARNING: _LogMessageItem('levelName', text='WARNING', font_color=_ColorMap.LIGHTYELLOW, highlight_type=self.__highlight_type, bold=True),
-            LogLevel.ERROR: _LogMessageItem('levelName', text='ERROR', font_color=_ColorMap.WHITE, background_color=_ColorMap.LIGHTRED, highlight_type=self.__highlight_type, bold=True),
-            LogLevel.CRITICAL: _LogMessageItem('levelName', text='CRITICAL', font_color=_ColorMap.LIGHTYELLOW, background_color=_ColorMap.RED, highlight_type=self.__highlight_type, bold=True, blink=True),
+            LogLevel.NOTSET  : _LogMessageItem('levelName', text='NOTSET', font_color=_ColorMap.LIGHTBLUE,
+                                               highlight_type=self.__highlight_type),
+            LogLevel.TRACE   : _LogMessageItem('levelName', text='TRACE', font_color=_ColorMap.LIGHTGREEN,
+                                               highlight_type=self.__highlight_type),
+            LogLevel.DEBUG   : _LogMessageItem('levelName', text='DEBUG', font_color=_ColorMap.BLACK,
+                                               background_color=_ColorMap.LIGHTGREEN,
+                                               highlight_type=self.__highlight_type),
+            LogLevel.INFO    : _LogMessageItem('levelName', text='INFO', font_color=_ColorMap.BLUE,
+                                               highlight_type=self.__highlight_type),
+            LogLevel.WARNING : _LogMessageItem('levelName', text='WARNING', font_color=_ColorMap.LIGHTYELLOW,
+                                               highlight_type=self.__highlight_type, bold=True),
+            LogLevel.ERROR   : _LogMessageItem('levelName', text='ERROR', font_color=_ColorMap.WHITE,
+                                               background_color=_ColorMap.LIGHTRED,
+                                               highlight_type=self.__highlight_type, bold=True),
+            LogLevel.CRITICAL: _LogMessageItem('levelName', text='CRITICAL', font_color=_ColorMap.LIGHTYELLOW,
+                                               background_color=_ColorMap.RED, highlight_type=self.__highlight_type,
+                                               bold=True, blink=True),
         }
         self.__log_level_translation_dict: dict = {
-            LogLevel.NOTSET: LogLevel.NOTSET,
-            LogLevel.TRACE: LogLevel.NOTSET,
-            LogLevel.DEBUG: LogLevel.TRACE,
-            LogLevel.INFO: LogLevel.DEBUG,
-            LogLevel.WARNING: LogLevel.INFO,
-            LogLevel.ERROR: LogLevel.WARNING,
+            LogLevel.NOTSET  : LogLevel.NOTSET,
+            LogLevel.TRACE   : LogLevel.NOTSET,
+            LogLevel.DEBUG   : LogLevel.TRACE,
+            LogLevel.INFO    : LogLevel.DEBUG,
+            LogLevel.WARNING : LogLevel.INFO,
+            LogLevel.ERROR   : LogLevel.WARNING,
             LogLevel.CRITICAL: LogLevel.ERROR,
-            LogLevel.NOOUT: LogLevel.ERROR
+            LogLevel.NOOUT   : LogLevel.ERROR
         }
 
     def __set_log_file_path(self) -> None:
@@ -424,11 +450,13 @@ class JFLogger(object):
             self.__start_time_format = self.__start_time_log.strftime("%Y%m%d_%H%M%S")
             if not os.path.exists(self.__log_dir):
                 os.makedirs(self.__log_dir)
-            self.__log_file_path = os.path.join(self.__log_dir, f'{self.__log_name}-[{self.__start_time_format}]--0.log')
+            self.__log_file_path = os.path.join(self.__log_dir,
+                                                f'{self.__log_name}-[{self.__start_time_format}]-[{os.getppid()}-{os.getpid()}]--0.log')
             if os.path.exists(self.__log_file_path):
                 index = 1
                 while True:
-                    self.__log_file_path = os.path.join(self.__log_dir, f'{self.__log_name}-[{self.__start_time_format}]_{index}--0.log')
+                    self.__log_file_path = os.path.join(self.__log_dir,
+                                                        f'{self.__log_name}-[{self.__start_time_format}]-[{os.getppid()}-{os.getpid()}]_{index}--0.log')
                     if not os.path.exists(self.__log_file_path):
                         break
                     index += 1
@@ -442,12 +470,15 @@ class JFLogger(object):
             self.__zip_file_path = os.path.join(self.__log_dir, f'{str_list[0]}--Compressed.zip')
 
     def __setattr__(self, name: str, value) -> None:
-        if hasattr(self, f'_{self.__class__.__name__}__kwargs') and name != f'_{self.__class__.__name__}__kwargs' and name in self.__kwargs:
+        if hasattr(self,
+                   f'_{self.__class__.__name__}__kwargs') and name != f'_{self.__class__.__name__}__kwargs' and name in self.__kwargs:
             self.__kwargs[name] = value
             if name not in self.__var_dict:
                 self.__var_dict[name] = _LogMessageItem(name, _ColorMap.CYAN)
             self.__var_dict[name].set_text(value)
-        if hasattr(self, f'_{self.__class__.__name__}__kwargs') and (not name.startswith(f'_{self.__class__.__name__}__') and name not in ['__signals__', '__class_signals__'] and name not in self.__dict__):
+        if hasattr(self, f'_{self.__class__.__name__}__kwargs') and (
+                not name.startswith(f'_{self.__class__.__name__}__') and name not in ['__signals__',
+                                                                                      '__class_signals__'] and name not in self.__dict__):
             error_text = ansi_color_text(f"'{self.__class__.__name__}' object has no attribute '{name}'", 33)
             raise AttributeError(error_text)
         super().__setattr__(name, value)
@@ -455,7 +486,8 @@ class JFLogger(object):
     def __clear_files(self) -> None:
         if self.__isExistsPath is False:
             return
-        if (not isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) or (not isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
+        if (not isinstance(self.__limit_files_count, int) and self.__limit_files_count < 0) or (
+                not isinstance(self.__limit_files_days, int) and self.__limit_files_days <= 0):
             return
         self.__log_dir = os.path.join(self.__root_path, self.__log_folder_name)
         if not os.path.exists(self.__log_dir):
@@ -468,14 +500,16 @@ class JFLogger(object):
         length_file_list = len(current_file_list)
         # clear files by count
         sorted_files = sorted(current_file_list, key=os.path.getctime)
-        if (isinstance(self.__limit_files_count, int) and self.__limit_files_count >= 0) and length_file_list > self.__limit_files_count:
+        if (isinstance(self.__limit_files_count,
+                       int) and self.__limit_files_count >= 0) and length_file_list > self.__limit_files_count:
             sorted_files = sorted(current_file_list, key=os.path.getctime)
             for file_path in sorted_files[:length_file_list - self.__limit_files_count]:
                 os.remove(file_path)
         # clear files by days
         elif isinstance(self.__limit_files_days, int) and self.__limit_files_days > 0:
             for file_path in current_file_list:
-                if (datetime.today() - datetime.fromtimestamp(os.path.getctime(file_path))).days > self.__limit_files_days:
+                if (datetime.today() - datetime.fromtimestamp(
+                        os.path.getctime(file_path))).days > self.__limit_files_days:
                     os.remove(file_path)
         self.__last_log_file_path = current_file_list[-1] if current_file_list else None
 
@@ -579,10 +613,10 @@ class JFLogger(object):
 
             # Found valid caller
             caller_info = {
-                'caller': caller_frame,
+                'caller'     : caller_frame,
                 'caller_name': function_name,
-                'class_name': temp_class_name or '<module>',
-                'line_num': caller_frame.f_lineno,
+                'class_name' : temp_class_name or '<module>',
+                'line_num'   : caller_frame.f_lineno,
                 'module_name': module_name,
                 'script_name': script_name,
                 'script_path': script_path,
@@ -597,10 +631,10 @@ class JFLogger(object):
             code = caller_frame.f_code
             filename = code.co_filename
             caller_info = {
-                'caller': caller_frame,
+                'caller'     : caller_frame,
                 'caller_name': code.co_name,
-                'class_name': '<module>',
-                'line_num': caller_frame.f_lineno,
+                'class_name' : '<module>',
+                'line_num'   : caller_frame.f_lineno,
                 'module_name': os.path.splitext(os.path.basename(filename))[0],
                 'script_name': os.path.basename(filename),
                 'script_path': filename,
@@ -608,7 +642,7 @@ class JFLogger(object):
 
         # Add thread/process info
         caller_info.update({
-            'thread_name': thread_name,
+            'thread_name' : thread_name,
             'process_name': process_name,
         })
 
@@ -633,7 +667,7 @@ class JFLogger(object):
         script_path = caller_info['script_path']
         line_num = caller_info['line_num']
         self.__var_dict['logName'].set_text(self.__log_name)
-        self.__var_dict['asctime'].set_text(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        self.__var_dict['asctime'].set_text(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
         self.__var_dict['processName'].set_text(caller_info['process_name'])
         self.__var_dict['threadName'].set_text(caller_info['thread_name'])
         self.__var_dict['moduleName'].set_text(caller_info['module_name'])
@@ -690,7 +724,8 @@ class JFLogger(object):
                         zipf.write(last_log_file_path, arcname=arcname)
                     os.remove(last_log_file_path)
                 except Exception as e:
-                    self.__output(level=LogLevel.CRITICAL, message=f"Failed to compress log data. {last_log_file_path}: {e}")
+                    self.__output(level=LogLevel.CRITICAL,
+                                  message=f"Failed to compress log data. {last_log_file_path}: {e}")
 
     def __run_async_rotated_log_compression(self):
         if self.__log_file_path_last_queue.empty() or not self.__enableRuntimeZip:
@@ -738,7 +773,7 @@ class JFLogger(object):
                 self.__current_day = datetime.today().date()
                 file_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 start_time = self.__start_time_log.strftime('%Y-%m-%d %H:%M:%S')
-                message = f"""{'#'*66}\n# <start time> This Program is started at\t {start_time}.\n# <file  time> This log file is created at\t {file_time}.\n{'#'*66}\n\n{message}"""
+                message = f"""{'#' * 66}\n# <start time> This Program is started at\t {start_time}.\n# <file  time> This log file is created at\t {file_time}.\n{'#' * 66}\n\n{message}"""
                 self.__current_size = len(message.encode('utf-8'))
                 self.__run_async_rotated_log_compression()
             # Prevent folders from being deleted accidentally before writing
@@ -881,7 +916,8 @@ class JFLogger(object):
             - logger_name: The name of the logger to be listened
             - level: The level of the listener
         """
-        if not (hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler') and hasattr(self, f'_{self.__class__.__name__}__logging_listener')):
+        if not (hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler') and hasattr(self,
+                                                                                                   f'_{self.__class__.__name__}__logging_listener')):
             self.__logging_listener_handler = _LoggingListener(self.__log_level_translation_dict[level])
             self.__logging_listener: logging.Logger = logging.getLogger(logger_name)
             self.__logging_listener_handler.signal_trace.connect(self._trace)
@@ -896,7 +932,8 @@ class JFLogger(object):
         self.__logging_listener.setLevel(self.__log_level_translation_dict[level])
 
     def remove_listen_logging(self) -> typing.Self:
-        if hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler') and hasattr(self, f'_{self.__class__.__name__}__logging_listener'):
+        if hasattr(self, f'_{self.__class__.__name__}__logging_listener_handler') and hasattr(self,
+                                                                                              f'_{self.__class__.__name__}__logging_listener'):
             self.__logging_listener.removeHandler(self.__logging_listener_handler)
         return self
 
@@ -1045,7 +1082,9 @@ class JFLogger(object):
         """
         if log_folder_name in _Log_Default.LIST_RESERVE_NAME:
             warning_text = (
-                ansi_color_text(f'< WARNING > {log_folder_name} is a reserved name. Log folder name will set to {self.__log_name}', _ColorMap.LIGHTYELLOW.ANSI_TXT))
+                ansi_color_text(
+                    f'< WARNING > {log_folder_name} is a reserved name. Log folder name will set to {self.__log_name}',
+                    _ColorMap.LIGHTYELLOW.ANSI_TXT))
             if sys.stdout:
                 sys.stdout.write(warning_text)
             self.__log_folder_name: str = self.__log_name
